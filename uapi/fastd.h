@@ -1,0 +1,21 @@
+#ifndef _UAPI_FASTD_H
+#define _UAPI_FASTD_H
+
+#define FASTD_GENL_NAME "fastd"
+#define FASTD_GENL_VERSION 1
+
+enum {
+	FASTD_CMD_UNSPEC,
+	FASTD_CMD_SETFD,
+	__FASTD_CMD_MAX
+};
+#define FASTD_CMD_MAX (__FASTD_CMD_MAX - 1)
+
+enum {
+	FASTD_SETFD_A_UNSPEC,
+	FASTD_SETFD_A_FD,
+	__FASTD_SETFD_A_LAST
+};
+#define FASTD_SETFD_A_MAX (__FASTD_SETFD_A_LAST - 1)
+
+#endif /* _UAPI_FASTD_H */
