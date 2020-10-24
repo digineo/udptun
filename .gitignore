@@ -1,0 +1,8 @@
+.*.cmd
+.vagrant
+modules.order
+Module.symvers
+*.ko
+*.mod
+*.o
+/output
