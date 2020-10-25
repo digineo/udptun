@@ -3,9 +3,9 @@
 #include <linux/moduleparam.h>
 #include <linux/init.h>     /* Needed for the module_init/exit() macros */
 #include <linux/errno.h>
+#include <linux/inetdevice.h>
 #include <net/protocol.h>
 #include <net/ip_tunnels.h>
-#include <net/ip6_tunnel.h>
 #include <net/udp_tunnel.h>
 #include "udptun.h"
 #include "uapi/fastd.h"
@@ -74,19 +74,62 @@ static int fou_stop(struct net_device *dev)
 
 
 
+
+
+
+
+
+
+
+
+static int _push_fastd_header(
+	struct sk_buff *skb,
+	unsigned int needed_headroom)
+{
+	int rc;
+
+	needed_headroom += sizeof(struct udphdr);
+
+	if (needed_headroom > skb_headroom(skb)) {
+		pr_debug_ratelimited(
+			"head space: %d, needed: %d",
+			skb_headroom(skb), needed_headroom);
+
+		rc = skb_cow_head(skb, needed_headroom);
+		if (unlikely(rc))
+			return -ENOBUFS;
+	}
+
+	return 0;
+}
+
+
+
+
 static struct rtable * _get_rtable4(
-	const struct fou_dev *foudev,
+	struct fou_dev *foudev,
 	const struct sk_buff *skb)
 {
+    struct sock *sk = foudev->sock->sk;
+    struct flowi4 *flowinfo = &foudev->flowinfo.u.ip4;
 	struct rtable *rt;
 
-	rt = dst_cache_get_ip4(&foudev->routing_cache, &foudev->flowinfo.u.ip4.saddr);
+	rt = dst_cache_get_ip4(&foudev->routing_cache, &flowinfo->saddr);
 	if (likely(rt))
 		return rt;
 
 	pr_debug("dst_cache_get_ip4 miss");
 
-	rt = ip_route_output_flow(sock_net(foudev->sock->sk), &foudev->flowinfo.u.ip4, foudev->sock->sk);
+	/* Check whenever the cached source IP is gone. */
+	if (unlikely(!inet_confirm_addr(sock_net(sk), NULL, 0,
+	                                flowinfo->saddr,
+	                                RT_SCOPE_HOST))) {
+		dst_cache_reset(&foudev->routing_cache);
+
+		return ERR_PTR(-EHOSTUNREACH);
+	}
+
+	rt = ip_route_output_flow(sock_net(sk), flowinfo, sk);
 	if (unlikely(IS_ERR(rt)))
 		return rt;
 
@@ -98,10 +141,122 @@ static struct rtable * _get_rtable4(
 		return ERR_PTR(-ELOOP);
 	}
 
-	dst_cache_set_ip4(&foudev->routing_cache, &rt->dst, foudev->flowinfo.u.ip4.saddr);
+	dst_cache_set_ip4(&foudev->routing_cache, &rt->dst, flowinfo->saddr);
 
 	return rt;
 }
+
+
+static int _send4(struct fou_dev *foudev, struct sk_buff *skb)
+{
+    struct flowi4 *flowinfo = &foudev->flowinfo.u.ip4;
+	struct rtable *rt;
+	int rc;
+
+	rt = _get_rtable4(foudev, skb);
+	if (unlikely(IS_ERR(rt))) {
+		rc = PTR_ERR(rt);
+		pr_warn_ratelimited("no route, error %d", rc);
+		goto err_no_route;
+	}
+
+	rc = _push_fastd_header(skb, sizeof(struct iphdr));
+	if (unlikely(rc))
+		goto err_no_buffer_space;
+
+	udp_tunnel_xmit_skb(
+		rt, foudev->sock->sk, skb, flowinfo->saddr, flowinfo->daddr, 0,
+		ip4_dst_hoplimit(&rt->dst), 0, flowinfo->fl4_sport,
+		flowinfo->fl4_dport, false, false);
+	return 0;
+
+err_no_buffer_space:
+	ip_rt_put(rt);
+
+err_no_route:
+	dev_kfree_skb(skb);
+
+	return rc;
+}
+
+
+static struct dst_entry * _get_dst_entry(
+	struct fou_dev *foudev,
+    const struct sk_buff *skb)
+{
+    struct sock *sk = foudev->sock->sk;
+    struct flowi6 *flowinfo = &foudev->flowinfo.u.ip6;
+	struct dst_entry *dst;
+	int rc = 0;
+
+	dst = dst_cache_get_ip6(&foudev->routing_cache, &flowinfo->saddr);
+	if (likely(dst))
+		return dst;
+
+	pr_debug("dst_cache_get_ip6 miss.");
+
+	if (!ipv6_chk_addr(sock_net(sk), &flowinfo->saddr, NULL, 0)) {
+		dst_cache_reset(&foudev->routing_cache);
+
+		return ERR_PTR(-EHOSTUNREACH);
+	}
+
+	rc = ip6_dst_lookup(sock_net(sk), sk, &dst, flowinfo);
+	if (unlikely(rc))
+		return ERR_PTR(rc);
+
+	/* Avoid looping packages coming from the tunnel netdev back into
+	 * the same netdev again.
+	 */
+	if (unlikely(dst->dev == skb->dev)) {
+		dst_release(dst);
+		return ERR_PTR(-ELOOP);
+	}
+
+	dst_cache_set_ip6(&foudev->routing_cache, dst, &flowinfo->saddr);
+
+	return dst;
+}
+
+
+static int _send6(struct fou_dev *foudev, struct sk_buff *skb)
+{
+    struct flowi6 *flowinfo = &foudev->flowinfo.u.ip6;
+	struct dst_entry *dst;
+	int rc = 0;
+
+	dst = _get_dst_entry(foudev, skb);
+	if (unlikely(IS_ERR(dst))) {
+		rc = PTR_ERR(dst);
+		pr_debug_ratelimited("no route, error %d", rc);
+		goto err_no_route;
+	}
+
+	rc = _push_fastd_header(skb, sizeof(struct ipv6hdr));
+	if (unlikely(rc))
+		goto err_no_buffer_space;
+
+	udp_tunnel6_xmit_skb(
+		dst, foudev->sock->sk, skb, skb->dev, &flowinfo->saddr,
+		&flowinfo->daddr, 0, ip6_dst_hoplimit(dst), 0,
+		flowinfo->fl6_sport, flowinfo->fl6_dport, false);
+	return 0;
+
+err_no_buffer_space:
+	dst_release(dst);
+
+err_no_route:
+	dev_kfree_skb(skb);
+
+	return rc;
+}
+
+
+
+
+
+
+
 
 
 
@@ -113,41 +268,23 @@ static netdev_tx_t fou_xmit(struct sk_buff *skb, struct net_device *dev)
     struct rtable *rt;
     struct fou_dev *foudev = netdev_priv(dev);
     int err;
-	__u8 tos, ttl;
 
+	skb_scrub_packet(skb, true);
 
-    err = skb_cow_head(skb, sizeof(struct udphdr));
-    if (unlikely(err)){
-        pr_warn("skb_cow_head failed");
-        goto free_skb;
-    }
+	if (foudev->sock->sk->sk_family == AF_INET) {
+		err = _send4(foudev, skb);
 
-	rt = _get_rtable4(foudev, skb);
-	if (unlikely(IS_ERR(rt))) {
-		err = PTR_ERR(rt);
-		pr_warn_ratelimited("no route, error %d", err);
-		goto free_skb;
+	} else if (foudev->sock->sk->sk_family == AF_INET6) {
+		err = _send6(foudev, skb);
+
+	} else {
+		dev_kfree_skb(skb);
+		err = -EAFNOSUPPORT;
 	}
 
-    tos = ip_tunnel_ecn_encap(foudev->flowinfo.u.ip4.flowi4_tos, ip_hdr(skb), skb);
-    ttl = ip4_dst_hoplimit(&rt->dst);
+    if (err)
+        return err;
 
-    pr_info("tos=%d ttl=%d", tos, ttl);
-
-
-    udp_tunnel_xmit_skb(rt, foudev->sock->sk, skb,
-        foudev->flowinfo.u.ip4.saddr,
-        foudev->flowinfo.u.ip4.daddr,
-        tos, ttl, 0,
-        foudev->flowinfo.u.ip4.fl4_sport,
-        foudev->flowinfo.u.ip4.fl4_dport,
-        false, false);
-
-    return NETDEV_TX_OK;
-free_dst:
-    dst_release(&rt->dst);
-free_skb:
-    kfree_skb(skb);
     dev->stats.tx_dropped++;
     return NETDEV_TX_OK;
 }
@@ -231,6 +368,38 @@ static int fou2info(struct nlattr *data[], struct fou_dev_cfg *conf,
     return 0;
 }
 
+// Überprüft, ob der übergebene Socket unterstützt wird
+static int fou_check_sock_type(struct socket *skt) {
+	struct sock *sk = skt->sk;
+    struct ipv6_pinfo *np;
+	int addrtype;
+
+	switch (skt->sk->sk_family) {
+	case AF_INET:
+		if (inet_sk(skt->sk)->inet_saddr == htonl(INADDR_ANY))
+			return -ESOCKTNOSUPPORT;
+		break;
+
+	case AF_INET6:
+		np = inet6_sk(skt->sk);
+		if (np->saddr_cache == NULL) {
+			pr_debug("saddr_cache missing");
+			return -ESOCKTNOSUPPORT;
+		}
+
+		addrtype = ipv6_addr_type(np->saddr_cache);
+		if (addrtype == IPV6_ADDR_ANY || !(addrtype & IPV6_ADDR_UNICAST))
+			return -ESOCKTNOSUPPORT;
+
+		break;
+
+	default:
+		return -ESOCKTNOSUPPORT;
+	}
+
+    return 0;
+}
+
 
 static void _update_flowi4(const struct fou_dev *foudev)
 {
@@ -265,6 +434,8 @@ static int fou_configure(struct net *net, struct net_device *dev,
     struct fou_net *fn = net_generic(net, fou_net_id);
     struct fou_dev *t, *foudev = netdev_priv(dev);
     struct udp_tunnel_sock_cfg tunnel_cfg;
+	struct ipv6_pinfo *np;
+    struct socket *skt;
     int err;
 
     pr_info("fou_configure");
@@ -272,22 +443,25 @@ static int fou_configure(struct net *net, struct net_device *dev,
     if(!foudev)
         return -EBUSY;
 
-    foudev->net = net;
-    foudev->dev = dev;
-
 
     /* This also takes a new reference on the fd, keeping it open. */
-    pr_info("sockfd: %d", conf->sockfd);
-    foudev->sock = sockfd_lookup(conf->sockfd, &err);
-    if (foudev->sock == NULL) {
+    skt = sockfd_lookup(conf->sockfd, &err);
+    if (skt == NULL) {
         return err == 0 ? -EINVAL : err;
     }
 
+    err = fou_check_sock_type(skt);
+    if (err)
+        return;
+
     struct sockaddr_storage local, peer;
-	kernel_getsockname(foudev->sock, (struct sockaddr *)&local);
-	kernel_getpeername(foudev->sock, (struct sockaddr *)&peer);
+	kernel_getsockname(skt, (struct sockaddr *)&local);
+	kernel_getpeername(skt, (struct sockaddr *)&peer);
 	pr_info("new socket %pISpfc -> %pISpfc", &local, &peer);
 
+    foudev->sock = skt;
+    foudev->net = net;
+    foudev->dev = dev;
 
     tunnel_cfg = (struct udp_tunnel_sock_cfg){
         .sk_user_data     = foudev,
@@ -299,18 +473,18 @@ static int fou_configure(struct net *net, struct net_device *dev,
         .gro_complete     = fou_gro_complete,
     };
     pr_info("fou: setup_udp_tunnel_sock()");
-    setup_udp_tunnel_sock(NULL, foudev->sock, &tunnel_cfg);
+    setup_udp_tunnel_sock(NULL, skt, &tunnel_cfg);
 
     /* As the setup_udp_tunnel_sock does not call udp_encap_enable if the
      * socket type is v6 an explicit call to udp_encap_enable is needed.
      */
-    if (foudev->sock->sk->sk_family == AF_INET6)
+    if (skt->sk->sk_family == AF_INET6)
         udp_encap_enable();
 
 
     // Update flow info
     // see https://elixir.bootlin.com/linux/latest/source/drivers/net/geneve.c#L1568
-    if (foudev->sock->sk->sk_family == AF_INET){
+    if (skt->sk->sk_family == AF_INET){
         _update_flowi4(foudev);
     } else {
         _update_flowi6(foudev);
@@ -327,21 +501,6 @@ static int fou_configure(struct net *net, struct net_device *dev,
 }
 
 
-static int fou_link_config(struct net_device *dev, struct nlattr *tb[])
-{
-    int err;
-    pr_info("fou_link_config");
-
-/*
-    if (tb[IFLA_MTU]) {
-        err = dev_set_mtu(dev, nla_get_u32(tb[IFLA_MTU]));
-        if (err)
-            return err;
-    }
-*/
-    return 0;
-}
-
 static int fou_newlink(struct net *src_net, struct net_device *dev,
                struct nlattr *tb[], struct nlattr *data[],
                struct netlink_ext_ack *extack)
@@ -356,10 +515,6 @@ static int fou_newlink(struct net *src_net, struct net_device *dev,
         return err;
 
     err = fou_configure(src_net, dev, &conf);
-    if (err)
-        return err;
-
-    err = fou_link_config(dev, tb);
     if (err)
         return err;
 

@@ -14,10 +14,17 @@ Vagrant.configure("2") do |config|
   # boxes at https://vagrantcloud.com/search.
   config.vm.box = "ubuntu/groovy64"
 
-    config.vm.provision :shell, inline: <<-SHELL
-      mkdir -p /root/.ssh
-      cat ~vagrant/.ssh/authorized_keys > /root/.ssh/authorized_keys
-    SHELL
+
+  config.vm.provider "virtualbox" do |v|
+    # socat -d -d ./ttyS0.sock PTY
+    # v.customize ["modifyvm", :id, "--uart1", "0x3F8", "4"]
+    # v.customize ["modifyvm", :id, "--uartmode1", "server", "ttyS0.sock"]
+  end
+
+  config.vm.provision :shell, inline: <<-SHELL
+    mkdir -p /root/.ssh
+    cat ~vagrant/.ssh/authorized_keys > /root/.ssh/authorized_keys
+  SHELL
 
   # Disable automatic box update checking. If you disable this, then
   # boxes will only be checked for updates when the user runs

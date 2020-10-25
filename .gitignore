@@ -4,5 +4,6 @@ modules.order
 Module.symvers
 *.ko
 *.mod
+*.mod.c
 *.o
 /output
