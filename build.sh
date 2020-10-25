@@ -1,4 +1,4 @@
-
+mkdir -p output
 cd go && go build -o ../output/config . && cd ..
 cd kmod && make && rsync udptun.ko ../output/ || exit 1
 
@@ -20,5 +20,6 @@ ssh -F "$ssh_config" -t root@"$host" <<SHELL
     modprobe udp_tunnel
     modprobe ip_tunnel
     modprobe ip6_tunnel
+    modprobe ip6_udp_tunnel
     insmod udptun.ko
 SHELL
