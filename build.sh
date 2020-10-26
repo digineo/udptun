@@ -22,4 +22,5 @@ ssh -F "$ssh_config" -t root@"$host" <<SHELL
     modprobe ip6_tunnel
     modprobe ip6_udp_tunnel
     insmod udptun.ko
+    /vagrant/output/config setup && ip link set up dev fou123
 SHELL
