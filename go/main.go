@@ -5,7 +5,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"time"
 )
 
 var (
@@ -75,41 +74,4 @@ func setup() {
 		IP:   ip,
 		Mask: ipnet.Mask,
 	})
-}
-
-func listen() {
-	addr := net.UDPAddr{
-		Port: int(*listenPort),
-	}
-
-	log.Println("listening on", addr)
-
-	conn, err := net.ListenUDP("udp", &addr)
-	if err != nil {
-		panic(err)
-	}
-
-	buffer := make([]byte, 1500)
-	for {
-		// By reading from the connection into the buffer, we block until there's
-		// new content in the socket that we're listening for new packets.
-		//
-		// Whenever new packets arrive, `buffer` gets filled and we can continue
-		// the execution.
-		//
-		// note.: `buffer` is not being reset between runs.
-		//	  It's expected that only `n` reads are read from it whenever
-		//	  inspecting its contents.
-		n, addr, err := conn.ReadFrom(buffer)
-		if err != nil {
-			panic(err)
-		}
-
-		log.Printf("packet-received: bytes=%d from=%s", n, addr.String())
-
-		time.Sleep(time.Second)
-		n, err = conn.WriteTo(buffer[:n], addr)
-		log.Printf("packet-sent: bytes=%d err=%v\n", n, err)
-
-	}
 }

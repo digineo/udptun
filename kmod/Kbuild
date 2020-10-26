@@ -1,0 +1,8 @@
+ccflags-$(CONFIG_UDPTUN_DEBUG) := -g -DDEBUG
+
+udptun-y := \
+	xmit.o \
+	recv.o \
+	module.o
+
+obj-m := udptun.o
