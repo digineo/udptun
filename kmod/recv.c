@@ -1,10 +1,9 @@
 
 #include <net/protocol.h>
-#include "recv.h"
+#include "module.h"
 
 
-
-inline static int _fastd_inner_proto(struct iphdr *hdr, int *out_inner_proto)
+inline static int _fou_inner_proto(struct iphdr *hdr, int *out_inner_proto)
 {
 	switch (hdr->version) {
 	case 4:
@@ -21,6 +20,7 @@ inline static int _fastd_inner_proto(struct iphdr *hdr, int *out_inner_proto)
 }
 
 
+// UDP packet received
 int fou_udp_recv(struct sock *sk, struct sk_buff *skb)
 {
 	struct fou_dev *foudev = sk->sk_user_data;
@@ -28,16 +28,17 @@ int fou_udp_recv(struct sock *sk, struct sk_buff *skb)
 	size_t len;
 	int proto;
 
-    pr_info("fou_udp_recv");
+	netdev_dbg(foudev->dev, "fou_udp_recv");
 
-    // UDP-header + IP-Header müssen vorhanden sein
+	// UDP-header + IP-Header müssen vorhanden sein
 	len = sizeof(struct udphdr) + sizeof(struct iphdr);
-	if (!pskb_may_pull(skb, len))
+	if (unlikely(!pskb_may_pull(skb, len)))
 		goto drop;
 
-	// IP-Header hinter dem UDP-Header
+	// Pointer to IP header behind the UDP header
 	iphdr = (struct iphdr *)&udp_hdr(skb)[1];
 
+	// Get ethernet protocol number
 	switch (iphdr->version) {
 	case 4:
 		proto = htons(ETH_P_IP);
@@ -49,27 +50,24 @@ int fou_udp_recv(struct sock *sk, struct sk_buff *skb)
 		goto drop;
 	}
 
+	// Pull UDP header
 	if (iptunnel_pull_header(skb, sizeof(struct udphdr), proto, false))
 		goto drop;
 
-    skb->dev = foudev->dev;
-    skb->pkt_type = PACKET_HOST;
+	// set incoming device
+	skb->dev = foudev->dev;
 
-	skb_reset_transport_header(skb);
-    // skb_scrub_packet(skb, true);
-
-    if(gro_cells_receive(&foudev->gro_cells, skb)) {
-        pr_info("fou_udp_recv: gro_cells_receive failed");
-    }
+	if(gro_cells_receive(&foudev->gro_cells, skb)) {
+		netdev_dbg(foudev->dev, "fou_udp_recv: gro_cells_receive failed");
+	}
 
 	return 0;
 
 drop:
-    pr_info("fou_udp_recv: dropped");
-    kfree_skb(skb);
-    return 0;
+	netdev_dbg(foudev->dev, "fou_udp_recv: dropped");
+	kfree_skb(skb);
+	return 0;
 }
-
 
 
 
@@ -86,22 +84,23 @@ struct sk_buff *fou_gro_receive(struct sock *sk,
 	struct gro_remcsum grc;
 	int proto;
 
-    pr_info("fou_gro_receive");
+	netdev_dbg(skb->dev, "fou_gro_receive");
 	skb_gro_remcsum_init(&grc);
 
 	off = skb_gro_offset(skb);
 	len = off + 1;  // im ersten byte steht die IP-Version
 
+	// Referenz auf IP-Header
 	iphdr = skb_gro_header_fast(skb, off);
 	if (skb_gro_header_hard(skb, len)) {
 		iphdr = skb_gro_header_slow(skb, len, off);
 		if (unlikely(!iphdr))
 			goto out;
-    }
+	}
 
-    if(_fastd_inner_proto(iphdr, &proto)){
-        goto out;
-    }
+	if(_fou_inner_proto(iphdr, &proto)){
+		goto out;
+	}
 
 	/* We can clear the encap_mark for GUE as we are essentially doing
 	 * one of two possible things.  We are either adding an L4 tunnel
@@ -141,10 +140,10 @@ int fou_gro_complete(struct sock *sk, struct sk_buff *skb,
 	int proto;
 	int err = -ENOENT;
 
-    pr_info("fou_gro_complete");
+	netdev_dbg(skb->dev, "fou_gro_complete");
 
-    if(_fastd_inner_proto(iphdr, &proto)){
-        return err;
+	if(_fou_inner_proto(iphdr, &proto)){
+		return err;
 	}
 
 	rcu_read_lock();

@@ -1,4 +1,3 @@
-
 #include <linux/inetdevice.h>
 #include "module.h"
 
@@ -29,15 +28,15 @@ static struct rtable * _get_rtable4(
 	struct fou_dev *foudev,
 	const struct sk_buff *skb)
 {
-    struct sock *sk = foudev->sock->sk;
-    struct flowi4 *flowinfo = &foudev->flowinfo.u.ip4;
+	struct sock *sk = foudev->sock->sk;
+	struct flowi4 *flowinfo = &foudev->flowinfo.u.ip4;
 	struct rtable *rt;
 
 	rt = dst_cache_get_ip4(&foudev->routing_cache, &flowinfo->saddr);
 	if (likely(rt))
 		return rt;
 
-	pr_debug("dst_cache_get_ip4 miss");
+	netdev_dbg(foudev->dev, "dst_cache_get_ip4 miss");
 
 	/* Check whenever the cached source IP is gone. */
 	if (unlikely(!inet_confirm_addr(sock_net(sk), NULL, 0,
@@ -68,7 +67,7 @@ static struct rtable * _get_rtable4(
 
 static int _send4(struct fou_dev *foudev, struct sk_buff *skb)
 {
-    struct flowi4 *flowinfo = &foudev->flowinfo.u.ip4;
+	struct flowi4 *flowinfo = &foudev->flowinfo.u.ip4;
 	struct rtable *rt;
 	int rc;
 
@@ -107,8 +106,8 @@ static struct dst_entry * _get_dst_entry(
 	struct fou_dev *foudev,
     const struct sk_buff *skb)
 {
-    struct sock *sk = foudev->sock->sk;
-    struct flowi6 *flowinfo = &foudev->flowinfo.u.ip6;
+	struct sock *sk = foudev->sock->sk;
+	struct flowi6 *flowinfo = &foudev->flowinfo.u.ip6;
 	struct dst_entry *dst;
 	int rc = 0;
 
@@ -116,7 +115,7 @@ static struct dst_entry * _get_dst_entry(
 	if (likely(dst))
 		return dst;
 
-	pr_debug("dst_cache_get_ip6 miss.");
+	netdev_dbg(foudev->dev, "dst_cache_get_ip6 miss");
 
 	if (!ipv6_chk_addr(sock_net(sk), &flowinfo->saddr, NULL, 0)) {
 		dst_cache_reset(&foudev->routing_cache);
@@ -144,7 +143,7 @@ static struct dst_entry * _get_dst_entry(
 
 static int _send6(struct fou_dev *foudev, struct sk_buff *skb)
 {
-    struct flowi6 *flowinfo = &foudev->flowinfo.u.ip6;
+	struct flowi6 *flowinfo = &foudev->flowinfo.u.ip6;
 	struct dst_entry *dst;
 	int rc = 0;
 
@@ -160,9 +159,15 @@ static int _send6(struct fou_dev *foudev, struct sk_buff *skb)
 		goto err_no_buffer_space;
 
 	udp_tunnel6_xmit_skb(
-		dst, foudev->sock->sk, skb, skb->dev, &flowinfo->saddr,
-		&flowinfo->daddr, 0, ip6_dst_hoplimit(dst), 0,
-		flowinfo->fl6_sport, flowinfo->fl6_dport, false);
+		dst, foudev->sock->sk,
+		skb, skb->dev,
+		&flowinfo->saddr,
+		&flowinfo->daddr,
+		0, ip6_dst_hoplimit(dst), 0,
+		flowinfo->fl6_sport,
+		flowinfo->fl6_dport,
+		false);
+
 	return 0;
 
 err_no_buffer_space:
@@ -179,11 +184,11 @@ err_no_route:
 
 netdev_tx_t fou_xmit(struct sk_buff *skb, struct net_device *dev)
 {
-    struct fou_dev *foudev = netdev_priv(dev);
-    int err;
+	struct fou_dev *foudev = netdev_priv(dev);
+	int err;
 
-    /* This is where the magic happens */
-    pr_info("fou_xmit");
+	/* This is where the magic happens */
+	netdev_dbg(dev, "fou_xmit");
 
 	skb_scrub_packet(skb, true);
 
@@ -198,9 +203,9 @@ netdev_tx_t fou_xmit(struct sk_buff *skb, struct net_device *dev)
 		err = -EAFNOSUPPORT;
 	}
 
-    if (err)
-        return err;
+	if (err)
+		return err;
 
-    dev->stats.tx_dropped++;
-    return NETDEV_TX_OK;
+	dev->stats.tx_dropped++;
+	return NETDEV_TX_OK;
 }
