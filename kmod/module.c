@@ -12,18 +12,18 @@
 
 
 
-static unsigned int fou_net_id __read_mostly;
+static unsigned int udptun_net_id __read_mostly;
 
 
-static int fou_err_lookup(struct sock *sk, struct sk_buff *skb);
+static int udptun_err_lookup(struct sock *sk, struct sk_buff *skb);
 
 
 /* Setup stats when device is created */
-static int fou_init(struct net_device *dev)
+static int udptun_init(struct net_device *dev)
 {
-	struct fou_dev *foudev = netdev_priv(dev);
+	struct udptun_dev *foudev = netdev_priv(dev);
 	int err;
-	netdev_dbg(dev, "fou_init");
+	netdev_dbg(dev, "udptun_init");
 
 	dev->tstats = netdev_alloc_pcpu_stats(struct pcpu_sw_netstats);
 	if (!dev->tstats)
@@ -37,25 +37,25 @@ static int fou_init(struct net_device *dev)
 	return 0;
 }
 
-static void fou_uninit(struct net_device *dev)
+static void udptun_uninit(struct net_device *dev)
 {
-	struct fou_dev *foudev = netdev_priv(dev);
-	netdev_dbg(dev, "fou_uninit");
+	struct udptun_dev *foudev = netdev_priv(dev);
+	netdev_dbg(dev, "udptun_uninit");
 
 	gro_cells_destroy(&foudev->gro_cells);
 	free_percpu(dev->tstats);
 }
 
-static int fou_open(struct net_device *dev)
+static int udptun_open(struct net_device *dev)
 {
-	netdev_dbg(dev, "fou_open");
+	netdev_dbg(dev, "udptun_open");
 	netif_start_queue(dev);
 	return 0;
 }
 
-static int fou_stop(struct net_device *dev)
+static int udptun_stop(struct net_device *dev)
 {
-	pr_debug("fou_stop");
+	pr_debug("udptun_stop");
 	netif_stop_queue(dev);
 	return 0;
 }
@@ -63,42 +63,42 @@ static int fou_stop(struct net_device *dev)
 
 
 
-static int fou_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb)
+static int udptun_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb)
 {
-	netdev_dbg(dev, "fou_fill_metadata_dst");
+	netdev_dbg(dev, "udptun_fill_metadata_dst");
 	return 0;
 }
 
-static const struct net_device_ops fou_netdev_ops = {
-	.ndo_init               = fou_init,
-	.ndo_uninit             = fou_uninit,
-	.ndo_open               = fou_open,
-	.ndo_stop               = fou_stop,
-	.ndo_start_xmit         = fou_xmit,
+static const struct net_device_ops udptun_netdev_ops = {
+	.ndo_init               = udptun_init,
+	.ndo_uninit             = udptun_uninit,
+	.ndo_open               = udptun_open,
+	.ndo_stop               = udptun_stop,
+	.ndo_start_xmit         = udptun_xmit,
 	.ndo_get_stats64        = ip_tunnel_get_stats64,
-	.ndo_fill_metadata_dst  = fou_fill_metadata_dst,
+	.ndo_fill_metadata_dst  = udptun_fill_metadata_dst,
 };
 
-static const struct nla_policy fou_policy[FASTD_SETFD_A_MAX + 1] = {
-	[FASTD_SETFD_A_FD] = { .type = NLA_U32 },
+static const struct nla_policy udptun_policy[UDPTUN_ATTR_MAX + 1] = {
+	[UDPTUN_ATTR_FD] = { .type = NLA_U32 },
 };
 
 
 /* Info for udev, that this is a virtual tunnel endpoint */
-static struct device_type fou_type = {
-	.name = "myfou",
+static struct device_type udptun_type = {
+	.name = "udptun",
 };
 
 /* Initialize the device structure. */
-static void fou_setup(struct net_device *dev)
+static void udptun_setup(struct net_device *dev)
 {
-	struct fou_dev *foudev = netdev_priv(dev);
+	struct udptun_dev *foudev = netdev_priv(dev);
 
-	netdev_dbg(dev, "fou_setup");
+	netdev_dbg(dev, "udptun_setup");
 
-	dev->netdev_ops        = &fou_netdev_ops;
+	dev->netdev_ops        = &udptun_netdev_ops;
 	dev->needs_free_netdev = true;
-	SET_NETDEV_DEVTYPE(dev, &fou_type);
+	SET_NETDEV_DEVTYPE(dev, &udptun_type);
 	dev->features         |= NETIF_F_SG | NETIF_F_HW_CSUM;
 	dev->features         |= NETIF_F_RXCSUM;
 	dev->features         |= NETIF_F_GSO_SOFTWARE;
@@ -118,12 +118,12 @@ static void fou_setup(struct net_device *dev)
 	foudev->dev = dev;
 }
 
-static int fou_validate(struct nlattr *tb[], struct nlattr *data[],
+static int udptun_validate(struct nlattr *tb[], struct nlattr *data[],
                 struct netlink_ext_ack *extack)
 {
-	pr_debug("fou_validate");
+	pr_debug("udptun_validate");
 
-	if (!data[FASTD_SETFD_A_FD]) {
+	if (!data[UDPTUN_ATTR_FD]) {
 		pr_debug("udptun: filedescriptor is missing");
 		return -EINVAL;
 	}
@@ -131,16 +131,16 @@ static int fou_validate(struct nlattr *tb[], struct nlattr *data[],
 	return 0;
 }
 
-static int fou2info(struct nlattr *data[], struct fou_dev_cfg *conf,
+static int fou2info(struct nlattr *data[], struct udptun_dev_cfg *conf,
             struct netlink_ext_ack *extack)
 {
 	memset(conf, 0, sizeof(*conf));
-	conf->sockfd = nla_get_u32(data[FASTD_SETFD_A_FD]);
+	conf->sockfd = nla_get_u32(data[UDPTUN_ATTR_FD]);
 	return 0;
 }
 
 // Überprüft, ob der übergebene Socket unterstützt wird
-static int fou_check_sock_type(struct socket *skt) {
+static int udptun_check_sock_type(struct socket *skt) {
     struct ipv6_pinfo *np;
 	int addrtype;
 
@@ -170,7 +170,7 @@ static int fou_check_sock_type(struct socket *skt) {
 }
 
 
-static void _update_flowi4(const struct fou_dev *foudev)
+static void _update_flowi4(const struct udptun_dev *foudev)
 {
 	const struct inet_sock *inet = inet_sk(foudev->sock->sk);
 	struct flowi4 *fl = (struct flowi4*)&foudev->flowinfo.u.ip4;
@@ -183,7 +183,7 @@ static void _update_flowi4(const struct fou_dev *foudev)
 	fl->fl4_dport = inet->inet_dport;
 }
 
-static void _update_flowi6(const struct fou_dev *foudev)
+static void _update_flowi6(const struct udptun_dev *foudev)
 {
 	struct inet_sock *inet = inet_sk(foudev->sock->sk);
 	struct ipv6_pinfo *np = inet6_sk(foudev->sock->sk);
@@ -216,17 +216,17 @@ inline static int getpeername(struct socket *sock, struct sockaddr_storage *addr
 #endif
 }
 
-static int fou_configure(struct net *net, struct net_device *dev,
-                 struct fou_dev_cfg *conf)
+static int udptun_configure(struct net *net, struct net_device *dev,
+                 struct udptun_dev_cfg *conf)
 {
-	struct fou_net *fn = net_generic(net, fou_net_id);
-	struct fou_dev *foudev = netdev_priv(dev);
+	struct udptun_net *fn = net_generic(net, udptun_net_id);
+	struct udptun_dev *foudev = netdev_priv(dev);
 	struct udp_tunnel_sock_cfg tunnel_cfg;
 	struct socket *skt;
 	struct sockaddr_storage local, peer;
 	int err;
 
-	netdev_dbg(dev, "fou_configure");
+	netdev_dbg(dev, "udptun_configure");
 
 	if (!foudev)
 		return -EBUSY;
@@ -238,7 +238,7 @@ static int fou_configure(struct net *net, struct net_device *dev,
 		return err == 0 ? -EINVAL : err;
 	}
 
-	err = fou_check_sock_type(skt);
+	err = udptun_check_sock_type(skt);
 	if (err) {
 		return err;
 	}
@@ -255,12 +255,12 @@ static int fou_configure(struct net *net, struct net_device *dev,
 	tunnel_cfg.sk_user_data     = foudev;
 	tunnel_cfg.encap_type       = 1;
 	tunnel_cfg.encap_destroy    = NULL;
-	tunnel_cfg.encap_rcv        = fou_udp_recv;
+	tunnel_cfg.encap_rcv        = udptun_udp_recv;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5,0,0)
-	tunnel_cfg.encap_err_lookup = fou_err_lookup;
+	tunnel_cfg.encap_err_lookup = udptun_err_lookup;
 #endif
-	tunnel_cfg.gro_receive      = fou_gro_receive;
-	tunnel_cfg.gro_complete     = fou_gro_complete;
+	tunnel_cfg.gro_receive      = udptun_gro_receive;
+	tunnel_cfg.gro_complete     = udptun_gro_complete;
 	setup_udp_tunnel_sock(net, skt, &tunnel_cfg);
 
 	/* As the setup_udp_tunnel_sock does not call udp_encap_enable if the
@@ -285,82 +285,82 @@ static int fou_configure(struct net *net, struct net_device *dev,
 		return err;
 
 
-	mutex_lock(&fn->fou_lock);
-	list_add(&foudev->list, &fn->fou_dev_list);
-	mutex_unlock(&fn->fou_lock);
+	mutex_lock(&fn->udptun_lock);
+	list_add(&foudev->list, &fn->udptun_dev_list);
+	mutex_unlock(&fn->udptun_lock);
 
 	return 0;
 }
 
 
-static int fou_newlink(struct net *src_net, struct net_device *dev,
+static int udptun_newlink(struct net *src_net, struct net_device *dev,
                struct nlattr *tb[], struct nlattr *data[],
                struct netlink_ext_ack *extack)
 {
-	struct fou_dev_cfg conf;
+	struct udptun_dev_cfg conf;
 	int err;
 
-	netdev_dbg(dev, "fou_newlink");
+	netdev_dbg(dev, "udptun_newlink");
 
 	err = fou2info(data, &conf, extack);
 	if (err)
 		return err;
 
-	err = fou_configure(src_net, dev, &conf);
+	err = udptun_configure(src_net, dev, &conf);
 	if (err)
 		return err;
 
 	return 0;
 }
 
-static void fou_dellink(struct net_device *dev, struct list_head *head)
+static void udptun_dellink(struct net_device *dev, struct list_head *head)
 {
-	struct fou_dev *foudev = netdev_priv(dev);
+	struct udptun_dev *foudev = netdev_priv(dev);
 
-	netdev_dbg(dev, "fou_dellink");
+	netdev_dbg(dev, "udptun_dellink");
 
 	list_del(&foudev->list);
 	unregister_netdevice_queue(dev, head);
 }
 
-static size_t fou_get_size(const struct net_device *dev)
+static size_t udptun_get_size(const struct net_device *dev)
 {
 	return
-		/* FASTD_SETFD_A_FD */
+		/* UDPTUN_ATTR_FD */
 		nla_total_size(4) +
 		0;
 }
 
-static int fou_link_fill_info(struct sk_buff *skb, const struct net_device *dev)
+static int udptun_link_fill_info(struct sk_buff *skb, const struct net_device *dev)
 {
 	return 0;
 }
 
 
 
-static struct rtnl_link_ops fou_link_ops __read_mostly = {
-	.kind       = "fou",
-	.maxtype    = FASTD_SETFD_A_MAX,
-	.policy     = fou_policy,
-	.priv_size  = sizeof(struct fou_dev),
-	.setup      = fou_setup,
-	.validate   = fou_validate,
-	.newlink    = fou_newlink,
-	.dellink    = fou_dellink,
-	.get_size   = fou_get_size,
-	.fill_info  = fou_link_fill_info,
+static struct rtnl_link_ops udptun_link_ops __read_mostly = {
+	.kind       = "udptun",
+	.maxtype    = UDPTUN_ATTR_MAX,
+	.policy     = udptun_policy,
+	.priv_size  = sizeof(struct udptun_dev),
+	.setup      = udptun_setup,
+	.validate   = udptun_validate,
+	.newlink    = udptun_newlink,
+	.dellink    = udptun_dellink,
+	.get_size   = udptun_get_size,
+	.fill_info  = udptun_link_fill_info,
 };
 
 
 
-static int fou_err_lookup(struct sock *sk, struct sk_buff *skb)
+static int udptun_err_lookup(struct sock *sk, struct sk_buff *skb)
 {
-	pr_debug("fou_err_lookup");
+	pr_debug("udptun_err_lookup");
 	return 0;
 }
 
 
-static void fou_release(struct fou_dev *foudev)
+static void udptun_release(struct udptun_dev *foudev)
 {
 	struct socket *sock = foudev->sock;
 
@@ -373,74 +373,74 @@ static void fou_release(struct fou_dev *foudev)
 
 
 // Registrierung eines network namespaces
-static __net_init int fou_init_net(struct net *net)
+static __net_init int udptun_init_net(struct net *net)
 {
-	struct fou_net *fn = net_generic(net, fou_net_id);
-	pr_debug("fou_init_net net_id=%d", fou_net_id);
+	struct udptun_net *fn = net_generic(net, udptun_net_id);
+	pr_debug("udptun_init_net net_id=%d", udptun_net_id);
 
 
-	INIT_LIST_HEAD(&fn->fou_dev_list);
-	mutex_init(&fn->fou_lock);
+	INIT_LIST_HEAD(&fn->udptun_dev_list);
+	mutex_init(&fn->udptun_lock);
 	return 0;
 }
 
 
 // Entfernung eines network namespaces
-static __net_exit void fou_exit_net(struct net *net)
+static __net_exit void udptun_exit_net(struct net *net)
 {
-	struct fou_net *fn = net_generic(net, fou_net_id);
-	struct fou_dev *fou, *next;
+	struct udptun_net *fn = net_generic(net, udptun_net_id);
+	struct udptun_dev *fou, *next;
 
-	pr_debug("fou_exit_net net_id=%d", fou_net_id);
+	pr_debug("udptun_exit_net net_id=%d", udptun_net_id);
 
 	/* Close all the FOU sockets */
-	mutex_lock(&fn->fou_lock);
-	list_for_each_entry_safe(fou, next, &fn->fou_dev_list, list)
-		fou_release(fou);
-	mutex_unlock(&fn->fou_lock);
+	mutex_lock(&fn->udptun_lock);
+	list_for_each_entry_safe(fou, next, &fn->udptun_dev_list, list)
+		udptun_release(fou);
+	mutex_unlock(&fn->udptun_lock);
 }
 
 
 /* Struct containing pointers to the above functions */
-static struct pernet_operations fou_net_ops = {
-	.init = fou_init_net,
-	.exit = fou_exit_net,
-	.id   = &fou_net_id,
-	.size = sizeof(struct fou_net),
+static struct pernet_operations udptun_net_ops = {
+	.init = udptun_init_net,
+	.exit = udptun_exit_net,
+	.id   = &udptun_net_id,
+	.size = sizeof(struct udptun_net),
 };
 
 
 
 // Kernelmodul wird initialisiert (modprobe/insmod)
-static int __init fou_init_module(void)
+static int __init udptun_init_module(void)
 {
 	int rc;
-	pr_debug("fou_init_module");
+	pr_debug("udptun_init_module");
 
-	rc = register_pernet_subsys(&fou_net_ops);
+	rc = register_pernet_subsys(&udptun_net_ops);
 	if (rc)
 		goto out;
 
-	rc = rtnl_link_register(&fou_link_ops);
+	rc = rtnl_link_register(&udptun_link_ops);
 
 out:
-	pr_debug("fou_init_module finished rc=%d", rc);
+	pr_debug("udptun_init_module finished rc=%d", rc);
 	return rc;
 }
 
 
 // Kernelmodul wird aufgeräumt (rmmod)
-static void __exit fou_cleanup_module(void)
+static void __exit udptun_cleanup_module(void)
 {
-	pr_debug("fou_cleanup_module");
-	rtnl_link_unregister(&fou_link_ops);
-	unregister_pernet_subsys(&fou_net_ops);
+	pr_debug("udptun_cleanup_module");
+	rtnl_link_unregister(&udptun_link_ops);
+	unregister_pernet_subsys(&udptun_net_ops);
 }
 
 
 
-module_init(fou_init_module);
-module_exit(fou_cleanup_module);
+module_init(udptun_init_module);
+module_exit(udptun_cleanup_module);
 MODULE_AUTHOR("Julian Kornberger <jk@digineo.de>");
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("UDP Tunnel");

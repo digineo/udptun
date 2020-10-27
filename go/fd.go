@@ -20,9 +20,9 @@ func passFd(fd uintptr, ifname string) {
 
 	attr := rtnetlink.LinkAttributes{
 		Name: ifname,
-		MTU:  1450,
+		MTU:  mtu,
 		Info: &rtnetlink.LinkInfo{
-			Kind: "fou",
+			Kind: "udptun",
 		},
 	}
 
