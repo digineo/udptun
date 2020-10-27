@@ -1,4 +1,5 @@
-KERNEL_DIR ?= /lib/modules/$(shell uname -r)/build
+KVERSION ?= $(shell uname -r)
+KERNEL_DIR ?= /lib/modules/$(KVERSION)/build
 
 all:
 	make -C $(KERNEL_DIR) M=$(PWD) modules

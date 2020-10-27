@@ -6,4 +6,5 @@ Module.symvers
 *.mod
 *.mod.c
 *.o
+*.deb
 /output
