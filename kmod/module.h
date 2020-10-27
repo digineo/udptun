@@ -6,20 +6,20 @@
 
 
 enum {
-	FASTD_SETFD_A_UNSPEC,
-	FASTD_SETFD_A_FD,
-	__FASTD_SETFD_A_LAST
+	UDPTUN_ATTR_UNSPEC,
+	UDPTUN_ATTR_FD,
+	__UDPTUN_ATTR_LAST
 };
-#define FASTD_SETFD_A_MAX (__FASTD_SETFD_A_LAST - 1)
+#define UDPTUN_ATTR_MAX (__UDPTUN_ATTR_LAST - 1)
 
 // fou in einem network namespace
-struct fou_net {
-  struct list_head fou_dev_list; // Liste der Devices
-  struct mutex     fou_lock;
+struct udptun_net {
+  struct list_head udptun_dev_list; // Liste der Devices
+  struct mutex     udptun_lock;
 };
 
 // ein fou device
-struct fou_dev {
+struct udptun_dev {
   struct list_head   list; // Liste der Devices im namespace
   struct net        *net;
   struct net_device *dev;
@@ -30,6 +30,6 @@ struct fou_dev {
 };
 
 // Zusätzliche Daten für die Device-Konfiguration
-struct fou_dev_cfg {
+struct udptun_dev_cfg {
   int sockfd;
 };

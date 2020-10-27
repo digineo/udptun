@@ -4,7 +4,7 @@
 #include "module.h"
 
 
-inline static int _fou_inner_proto(struct iphdr *hdr, int *out_inner_proto)
+inline static int _udptun_inner_proto(struct iphdr *hdr, int *out_inner_proto)
 {
 	switch (hdr->version) {
 	case 4:
@@ -22,14 +22,14 @@ inline static int _fou_inner_proto(struct iphdr *hdr, int *out_inner_proto)
 
 
 // UDP packet received
-int fou_udp_recv(struct sock *sk, struct sk_buff *skb)
+int udptun_udp_recv(struct sock *sk, struct sk_buff *skb)
 {
-	struct fou_dev *foudev = sk->sk_user_data;
+	struct udptun_dev *foudev = sk->sk_user_data;
 	struct iphdr *iphdr;
 	size_t len;
 	int proto;
 
-	netdev_dbg(foudev->dev, "fou_udp_recv");
+	netdev_dbg(foudev->dev, "udptun_udp_recv");
 
 	// UDP-header + IP-Header müssen vorhanden sein
 	len = sizeof(struct udphdr) + sizeof(struct iphdr);
@@ -59,23 +59,23 @@ int fou_udp_recv(struct sock *sk, struct sk_buff *skb)
 	skb->dev = foudev->dev;
 
 	if(gro_cells_receive(&foudev->gro_cells, skb)) {
-		netdev_dbg(foudev->dev, "fou_udp_recv: gro_cells_receive failed");
+		netdev_dbg(foudev->dev, "udptun_udp_recv: gro_cells_receive failed");
 	}
 
 	return 0;
 
 drop:
-	netdev_dbg(foudev->dev, "fou_udp_recv: dropped");
+	netdev_dbg(foudev->dev, "udptun_udp_recv: dropped");
 	kfree_skb(skb);
 	return 0;
 }
 
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,19,0)
-struct sk_buff *fou_gro_receive(struct sock *sk, struct list_head *head, struct sk_buff *skb) {
+struct sk_buff *udptun_gro_receive(struct sock *sk, struct list_head *head, struct sk_buff *skb) {
 	struct sk_buff *pp = NULL;
 #else
-struct sk_buff **fou_gro_receive(struct sock *sk, struct sk_buff **head, struct sk_buff *skb) {
+struct sk_buff **udptun_gro_receive(struct sock *sk, struct sk_buff **head, struct sk_buff *skb) {
 	struct sk_buff **pp = NULL;
 #endif
 	const struct net_offload **offloads;
@@ -86,7 +86,7 @@ struct sk_buff **fou_gro_receive(struct sock *sk, struct sk_buff **head, struct 
 	struct gro_remcsum grc;
 	int proto;
 
-	netdev_dbg(skb->dev, "fou_gro_receive");
+	netdev_dbg(skb->dev, "udptun_gro_receive");
 	skb_gro_remcsum_init(&grc);
 
 	off = skb_gro_offset(skb);
@@ -100,7 +100,7 @@ struct sk_buff **fou_gro_receive(struct sock *sk, struct sk_buff **head, struct 
 			goto out;
 	}
 
-	if(_fou_inner_proto(iphdr, &proto)){
+	if(_udptun_inner_proto(iphdr, &proto)){
 		goto out;
 	}
 
@@ -133,7 +133,7 @@ out:
 }
 
 
-int fou_gro_complete(struct sock *sk, struct sk_buff *skb,
+int udptun_gro_complete(struct sock *sk, struct sk_buff *skb,
                 int nhoff)
 {
 	const struct net_offload **offloads;
@@ -142,9 +142,9 @@ int fou_gro_complete(struct sock *sk, struct sk_buff *skb,
 	int proto;
 	int err = -ENOENT;
 
-	netdev_dbg(skb->dev, "fou_gro_complete");
+	netdev_dbg(skb->dev, "udptun_gro_complete");
 
-	if(_fou_inner_proto(iphdr, &proto)){
+	if(_udptun_inner_proto(iphdr, &proto)){
 		return err;
 	}
 

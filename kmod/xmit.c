@@ -2,7 +2,7 @@
 #include "module.h"
 
 
-static int _push_fastd_header(
+static int _push_udptun_header(
 	struct sk_buff *skb,
 	unsigned int needed_headroom)
 {
@@ -25,7 +25,7 @@ static int _push_fastd_header(
 
 
 static struct rtable * _get_rtable4(
-	struct fou_dev *foudev,
+	struct udptun_dev *foudev,
 	const struct sk_buff *skb)
 {
 	struct sock *sk = foudev->sock->sk;
@@ -65,7 +65,7 @@ static struct rtable * _get_rtable4(
 }
 
 
-static int _send4(struct fou_dev *foudev, struct sk_buff *skb)
+static int _send4(struct udptun_dev *foudev, struct sk_buff *skb)
 {
 	struct flowi4 *flowinfo = &foudev->flowinfo.u.ip4;
 	struct rtable *rt;
@@ -78,7 +78,7 @@ static int _send4(struct fou_dev *foudev, struct sk_buff *skb)
 		goto err_no_route;
 	}
 
-	rc = _push_fastd_header(skb, sizeof(struct iphdr));
+	rc = _push_udptun_header(skb, sizeof(struct iphdr));
 	if (unlikely(rc))
 		goto err_no_buffer_space;
 
@@ -103,7 +103,7 @@ err_no_route:
 
 
 static struct dst_entry * _get_dst_entry(
-	struct fou_dev *foudev,
+	struct udptun_dev *foudev,
     const struct sk_buff *skb)
 {
 	struct sock *sk = foudev->sock->sk;
@@ -141,7 +141,7 @@ static struct dst_entry * _get_dst_entry(
 }
 
 
-static int _send6(struct fou_dev *foudev, struct sk_buff *skb)
+static int _send6(struct udptun_dev *foudev, struct sk_buff *skb)
 {
 	struct flowi6 *flowinfo = &foudev->flowinfo.u.ip6;
 	struct dst_entry *dst;
@@ -154,7 +154,7 @@ static int _send6(struct fou_dev *foudev, struct sk_buff *skb)
 		goto err_no_route;
 	}
 
-	rc = _push_fastd_header(skb, sizeof(struct ipv6hdr));
+	rc = _push_udptun_header(skb, sizeof(struct ipv6hdr));
 	if (unlikely(rc))
 		goto err_no_buffer_space;
 
@@ -182,13 +182,13 @@ err_no_route:
 
 
 
-netdev_tx_t fou_xmit(struct sk_buff *skb, struct net_device *dev)
+netdev_tx_t udptun_xmit(struct sk_buff *skb, struct net_device *dev)
 {
-	struct fou_dev *foudev = netdev_priv(dev);
+	struct udptun_dev *foudev = netdev_priv(dev);
 	int err;
 
 	/* This is where the magic happens */
-	netdev_dbg(dev, "fou_xmit");
+	netdev_dbg(dev, "udptun_xmit");
 
 	skb_scrub_packet(skb, true);
 
