@@ -313,13 +313,19 @@ static int udptun_newlink(struct net *src_net, struct net_device *dev,
 	return 0;
 }
 
+static void udptun_release(struct udptun_dev *foudev)
+{
+	list_del(&foudev->list);
+	udp_tunnel_sock_release(foudev->sock);
+	dst_cache_destroy(&foudev->routing_cache);
+}
+
 static void udptun_dellink(struct net_device *dev, struct list_head *head)
 {
 	struct udptun_dev *foudev = netdev_priv(dev);
-
 	netdev_dbg(dev, "udptun_dellink");
 
-	list_del(&foudev->list);
+	udptun_release(foudev);
 	unregister_netdevice_queue(dev, head);
 }
 
@@ -333,6 +339,9 @@ static size_t udptun_get_size(const struct net_device *dev)
 
 static int udptun_link_fill_info(struct sk_buff *skb, const struct net_device *dev)
 {
+	struct udptun_dev *foudev = netdev_priv(dev);
+	pr_debug("udptun_link_fill_info");
+
 	return 0;
 }
 
@@ -360,18 +369,6 @@ static int udptun_err_lookup(struct sock *sk, struct sk_buff *skb)
 }
 
 
-static void udptun_release(struct udptun_dev *foudev)
-{
-	struct socket *sock = foudev->sock;
-
-	list_del(&foudev->list);
-	if (sock) {
-		udp_tunnel_sock_release(sock);
-		dst_cache_destroy(&foudev->routing_cache);
-	}
-}
-
-
 // Registrierung eines network namespaces
 static __net_init int udptun_init_net(struct net *net)
 {
@@ -396,7 +393,7 @@ static __net_exit void udptun_exit_net(struct net *net)
 	/* Close all the FOU sockets */
 	mutex_lock(&fn->udptun_lock);
 	list_for_each_entry_safe(fou, next, &fn->udptun_dev_list, list)
-		udptun_release(fou);
+	udptun_release(fou);
 	mutex_unlock(&fn->udptun_lock);
 }
 
