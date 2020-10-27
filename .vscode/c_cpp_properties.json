@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "/usr/src/linux-headers-5.8.0-25/include",
+                "/usr/src/linux-headers-5.8.0-25-generic/include",
+                "/usr/src/linux-headers-5.8.0-25/arch/arm64/include",
+                "/usr/src/linux-headers-5.8.0-25/arch/x86/include",
+                "${workspaceRoot}"
+            ],
+            "defines": [
+                "_GNU_SOURCE"
+            ],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-x64"
+        }
+    ],
+    "version": 4
+}
