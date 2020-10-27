@@ -2,6 +2,7 @@
 #include <linux/module.h>   /* Specifically a Kernel Module */
 #include <linux/init.h>     /* Needed for the module_init/exit() macros */
 #include <linux/errno.h>
+#include <linux/version.h>
 #include <net/protocol.h>
 #include <net/ip_tunnels.h>
 #include <net/udp_tunnel.h>
@@ -196,6 +197,25 @@ static void _update_flowi6(const struct fou_dev *foudev)
 	fl->fl6_dport = inet->inet_dport;
 }
 
+
+inline static int getsockname(struct socket *sock, struct sockaddr_storage *addr){
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
+	return kernel_getsockname(sock, (struct sockaddr *)addr);
+#else
+	int addrlen = sizeof(struct sockaddr_storage);
+	return kernel_getsockname(sock, (struct sockaddr *)addr, &addrlen);
+#endif
+}
+
+inline static int getpeername(struct socket *sock, struct sockaddr_storage *addr){
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
+	return kernel_getpeername(sock, (struct sockaddr *)addr);
+#else
+	int addrlen = sizeof(struct sockaddr_storage);
+	return kernel_getpeername(sock, (struct sockaddr *)addr, &addrlen);
+#endif
+}
+
 static int fou_configure(struct net *net, struct net_device *dev,
                  struct fou_dev_cfg *conf)
 {
@@ -223,8 +243,8 @@ static int fou_configure(struct net *net, struct net_device *dev,
 		return err;
 	}
 
-	kernel_getsockname(skt, (struct sockaddr *)&local);
-	kernel_getpeername(skt, (struct sockaddr *)&peer);
+	getsockname(skt, &local);
+	getpeername(skt, &peer);
 	netdev_dbg(dev, "new socket %pISpfc -> %pISpfc", &local, &peer);
 
 	foudev->sock = skt;
@@ -236,7 +256,9 @@ static int fou_configure(struct net *net, struct net_device *dev,
 	tunnel_cfg.encap_type       = 1;
 	tunnel_cfg.encap_destroy    = NULL;
 	tunnel_cfg.encap_rcv        = fou_udp_recv;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,0,0)
 	tunnel_cfg.encap_err_lookup = fou_err_lookup;
+#endif
 	tunnel_cfg.gro_receive      = fou_gro_receive;
 	tunnel_cfg.gro_complete     = fou_gro_complete;
 	setup_udp_tunnel_sock(net, skt, &tunnel_cfg);

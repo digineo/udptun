@@ -1,5 +1,6 @@
 
 #include <net/protocol.h>
+#include <linux/version.h>
 #include "module.h"
 
 
@@ -70,14 +71,15 @@ drop:
 }
 
 
-
-struct sk_buff *fou_gro_receive(struct sock *sk,
-                       struct list_head *head,
-                       struct sk_buff *skb)
-{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,19,0)
+struct sk_buff *fou_gro_receive(struct sock *sk, struct list_head *head, struct sk_buff *skb) {
+	struct sk_buff *pp = NULL;
+#else
+struct sk_buff **fou_gro_receive(struct sock *sk, struct sk_buff **head, struct sk_buff *skb) {
+	struct sk_buff **pp = NULL;
+#endif
 	const struct net_offload **offloads;
 	const struct net_offload *ops;
-	struct sk_buff *pp = NULL;
 	struct iphdr *iphdr;
 	size_t len, off;
 	int flush = 1;
