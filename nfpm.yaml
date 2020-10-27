@@ -1,0 +1,22 @@
+# nfpm example config file
+#
+# check https://nfpm.goreleaser.com/configuration for detailed usage
+#
+name: "digineo-udptun"
+arch: "amd64"
+platform: "linux"
+version: "v1.0.0"
+section: "default"
+priority: "extra"
+depends:
+- dkms
+maintainer: "Julian Kornberger <jk@digineo.de>"
+description: UDP Tunneling
+vendor: "Digineo GmbH"
+
+files:
+  ./kmod/*: "/usr/src/udptun-1.0.0"
+
+scripts:
+  postinstall: ./debian/postinstall.sh
+  preremove: ./debian/preremove.sh
