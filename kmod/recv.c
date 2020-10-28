@@ -3,7 +3,6 @@
 #include <linux/version.h>
 #include "module.h"
 
-
 inline static int _udptun_inner_proto(struct iphdr *hdr, int *out_inner_proto)
 {
 	switch (hdr->version) {
@@ -24,9 +23,10 @@ inline static int _udptun_inner_proto(struct iphdr *hdr, int *out_inner_proto)
 // UDP packet received
 int udptun_udp_recv(struct sock *sk, struct sk_buff *skb)
 {
-	struct udptun_dev *foudev = sk->sk_user_data;
+	struct udptun_dev *foudev;
 	struct iphdr *iphdr;
 	size_t len;
+	int err = 0;
 	int proto;
 
 	netdev_dbg(foudev->dev, "udptun_udp_recv");
@@ -51,8 +51,12 @@ int udptun_udp_recv(struct sock *sk, struct sk_buff *skb)
 		goto drop;
 	}
 
+	foudev = rcu_dereference_sk_user_data(sk);
+	if (unlikely(!foudev))
+		goto drop;
+
 	// Pull UDP header
-	if (iptunnel_pull_header(skb, sizeof(struct udphdr), proto, false))
+	if (iptunnel_pull_header(skb, sizeof(struct udphdr), proto, !net_eq(foudev->net, dev_net(foudev->dev))))
 		goto drop;
 
 	// set incoming device
@@ -66,6 +70,7 @@ int udptun_udp_recv(struct sock *sk, struct sk_buff *skb)
 
 drop:
 	netdev_dbg(foudev->dev, "udptun_udp_recv: dropped");
+	foudev->dev->stats.rx_dropped++;
 	kfree_skb(skb);
 	return 0;
 }
