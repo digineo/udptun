@@ -1,6 +1,6 @@
 mkdir -p output
 cd go && go build -o ../output/config . && cd ..
-cd kmod && make && rsync udptun.ko ../output/ || exit 1
+cd kmod && make clean && make DEBUG=1 && rsync udptun.ko ../output/ || exit 1
 
 host=default
 
@@ -22,5 +22,6 @@ ssh -F "$ssh_config" -t root@"$host" <<SHELL
     modprobe ip6_tunnel
     modprobe ip6_udp_tunnel
     insmod udptun.ko
-    /vagrant/output/config setup && ip link set up dev fou123
+    /vagrant/output/config setup && ip link set up dev test
+    /vagrant/output/config info
 SHELL

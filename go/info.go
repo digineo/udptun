@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/binary"
+	"fmt"
 	"log"
 	"net"
+	"strconv"
 
 	"github.com/jsimonetti/rtnetlink"
 	"github.com/mdlayher/netlink"
@@ -17,7 +19,6 @@ func info() {
 	defer conn.Close()
 
 	msgs, err := conn.Link.ListByKind("udptun")
-
 	if err != nil {
 		panicf("failed to list links: %v", err)
 	}
@@ -25,15 +26,19 @@ func info() {
 	for i := range msgs {
 		msg := &msgs[i]
 		data, err := decodeLinkData(msg.Attributes.Info.Data)
-
 		if err != nil {
 			log.Println(err)
 			continue
 		}
 
-		log.Printf("%v %+v", msg.Attributes.Name, data)
+		fmt.Printf("iface=%v local=%+v remote=%+v\n", msg.Attributes.Name, udpAddrToString(data.local), udpAddrToString(data.remote))
 	}
+}
 
+func udpAddrToString(addr net.UDPAddr) string {
+	port := strconv.Itoa(addr.Port)
+
+	return net.JoinHostPort(addr.IP.String(), port)
 }
 
 const (

@@ -4,7 +4,8 @@
 
 static int _push_udptun_header(
 	struct sk_buff *skb,
-	unsigned int needed_headroom)
+	unsigned int needed_headroom,
+	bool udp_sum)
 {
 	int rc;
 
@@ -20,7 +21,9 @@ static int _push_udptun_header(
 			return -ENOBUFS;
 	}
 
-	return 0;
+	rc = udp_tunnel_handle_offloads(skb, udp_sum);
+
+	return rc;
 }
 
 
@@ -69,6 +72,7 @@ static int _send4(struct udptun_dev *foudev, struct sk_buff *skb)
 {
 	struct flowi4 *flowinfo = &foudev->flowinfo.u.ip4;
 	struct rtable *rt;
+	bool udp_sum = false;
 	int rc;
 
 	rt = _get_rtable4(foudev, skb);
@@ -78,7 +82,7 @@ static int _send4(struct udptun_dev *foudev, struct sk_buff *skb)
 		goto err_no_route;
 	}
 
-	rc = _push_udptun_header(skb, sizeof(struct iphdr));
+	rc = _push_udptun_header(skb, sizeof(struct iphdr), udp_sum);
 	if (unlikely(rc))
 		goto err_no_buffer_space;
 
@@ -89,7 +93,7 @@ static int _send4(struct udptun_dev *foudev, struct sk_buff *skb)
 		0, ip4_dst_hoplimit(&rt->dst), 0,
 		flowinfo->fl4_sport,
 		flowinfo->fl4_dport,
-		false, false);
+		false, !udp_sum);
 	return 0;
 
 err_no_buffer_space:
@@ -145,6 +149,7 @@ static int _send6(struct udptun_dev *foudev, struct sk_buff *skb)
 {
 	struct flowi6 *flowinfo = &foudev->flowinfo.u.ip6;
 	struct dst_entry *dst;
+	bool udp_sum = false;
 	int rc = 0;
 
 	dst = _get_dst_entry(foudev, skb);
@@ -154,7 +159,7 @@ static int _send6(struct udptun_dev *foudev, struct sk_buff *skb)
 		goto err_no_route;
 	}
 
-	rc = _push_udptun_header(skb, sizeof(struct ipv6hdr));
+	rc = _push_udptun_header(skb, sizeof(struct ipv6hdr), udp_sum);
 	if (unlikely(rc))
 		goto err_no_buffer_space;
 
@@ -166,7 +171,7 @@ static int _send6(struct udptun_dev *foudev, struct sk_buff *skb)
 		0, ip6_dst_hoplimit(dst), 0,
 		flowinfo->fl6_sport,
 		flowinfo->fl6_dport,
-		false);
+		!udp_sum);
 
 	return 0;
 
@@ -191,6 +196,7 @@ netdev_tx_t udptun_xmit(struct sk_buff *skb, struct net_device *dev)
 	netdev_dbg(dev, "udptun_xmit");
 
 	skb_scrub_packet(skb, true);
+	skb_reset_mac_header(skb);
 
 	if (foudev->sock->sk->sk_family == AF_INET) {
 		err = _send4(foudev, skb);
@@ -203,9 +209,10 @@ netdev_tx_t udptun_xmit(struct sk_buff *skb, struct net_device *dev)
 		err = -EAFNOSUPPORT;
 	}
 
-	if (err)
+	if (err) {
+		dev->stats.tx_dropped++;
 		return err;
+	}
 
-	dev->stats.tx_dropped++;
 	return NETDEV_TX_OK;
 }
