@@ -8,10 +8,11 @@ import (
 )
 
 var (
-	ifname     = flag.String("ifname", "fou123", "interface name")
-	peer       = flag.String("peer", "192.168.180.38:8500", "peer address")
-	local      = flag.String("ip", "fe80::1/64", "local ip address")
-	listenPort = flag.Uint("port", 8500, "listening port")
+	ifname         = flag.String("ifname", "test", "interface name")
+	remoteEndpoint = flag.String("remote", "192.168.180.38:8500", "tunnel remote endpoint")
+	localEndpoint  = flag.String("local", ":0", "tunnel local endpoint")
+	local          = flag.String("ip", "fe80::1/64", "ip address of the interface")
+	listenPort     = flag.Uint("port", 8500, "listening port for the server")
 )
 
 func main() {
@@ -23,6 +24,8 @@ func main() {
 		setup()
 	case "listen":
 		listen()
+	case "info":
+		info()
 	default:
 		log.Panicln("invalid command:", cmd)
 		os.Exit(1)
@@ -30,15 +33,20 @@ func main() {
 }
 
 func setup() {
-	remote, err := net.ResolveUDPAddr("udp", *peer)
+	raddr, err := net.ResolveUDPAddr("udp", *remoteEndpoint)
 	if err != nil {
 		panic(err)
 	}
 
-	log.Println("connecting to", remote)
+	laddr, err := net.ResolveUDPAddr("udp", *localEndpoint)
+	if err != nil {
+		panic(err)
+	}
+
+	log.Println("connecting from", laddr, "to", raddr)
 
 	// UDP-Socket aufbauen
-	conn, err := net.DialUDP("udp", nil, remote)
+	conn, err := net.DialUDP("udp", laddr, raddr)
 	if err != nil {
 		panic(err)
 	}

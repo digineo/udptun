@@ -19,7 +19,6 @@ var (
 const mtu = 1450
 
 func listen() {
-	ifname := "tun0"
 	addr := net.UDPAddr{
 		Port: int(*listenPort),
 	}
@@ -27,12 +26,12 @@ func listen() {
 	log.Println("listening on", addr)
 	var err error
 
-	tun, err = CreateTun(ifname)
+	tun, err = CreateTun(*ifname)
 	if err != nil {
 		panic(err)
 	}
 
-	err = SetupTun(ifname, mtu)
+	err = SetupTun(*ifname, mtu)
 	if err != nil {
 		panic(err)
 	}

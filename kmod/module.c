@@ -331,16 +331,51 @@ static void udptun_dellink(struct net_device *dev, struct list_head *head)
 
 static size_t udptun_get_size(const struct net_device *dev)
 {
-	return
-		/* UDPTUN_ATTR_FD */
-		nla_total_size(4) +
+	return nla_total_size(sizeof(__u32)) +			/* UDPTUN_ATTR_FD */
+		nla_total_size(sizeof(__u8)) +			/* UDPTUN_ATTR_AF */
+		nla_total_size(sizeof(struct in6_addr)) +	/* UDPTUN_ATTR_LOCAL_ADDR */
+		nla_total_size(sizeof(__u16)) +			/* UDPTUN_ATTR_LOCAL_PORT */
+		nla_total_size(sizeof(struct in6_addr)) +	/* UDPTUN_ATTR_PEER_ADDR */
+		nla_total_size(sizeof(__u16)) +			/* UDPTUN_ATTR_PEER_PORT */
 		0;
 }
 
+// returns the device specific link data for netlink
 static int udptun_link_fill_info(struct sk_buff *skb, const struct net_device *dev)
 {
+	struct sock *sk;
+	struct inet_sock *inet;
 	struct udptun_dev *foudev = netdev_priv(dev);
-	pr_debug("udptun_link_fill_info");
+
+	netdev_dbg(dev, "udptun_link_fill_info");
+
+	sk = foudev->sock->sk;
+	if (sk == NULL) {
+		// Socket has been closed
+		return 0;
+	}
+
+	inet = inet_sk(sk);
+
+	if (nla_put_u8(skb, UDPTUN_ATTR_AF, sk->sk_family) ||
+	    nla_put_be16(skb, UDPTUN_ATTR_LOCAL_PORT, inet->inet_sport) ||
+	    nla_put_be16(skb, UDPTUN_ATTR_PEER_PORT, inet->inet_dport)
+	)
+		return -1;
+
+	if (sk->sk_family == AF_INET) {
+		if (nla_put_in_addr(skb, UDPTUN_ATTR_LOCAL_ADDR, sk->sk_rcv_saddr))
+			return -1;
+
+		if (nla_put_in_addr(skb, UDPTUN_ATTR_PEER_ADDR, sk->sk_daddr))
+			return -1;
+	} else {
+		if (nla_put_in6_addr(skb, UDPTUN_ATTR_LOCAL_ADDR, &sk->sk_v6_rcv_saddr))
+			return -1;
+
+		if (nla_put_in6_addr(skb, UDPTUN_ATTR_PEER_ADDR, &sk->sk_v6_daddr))
+			return -1;
+	}
 
 	return 0;
 }

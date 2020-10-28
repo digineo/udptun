@@ -7,9 +7,16 @@
 
 enum {
 	UDPTUN_ATTR_UNSPEC,
-	UDPTUN_ATTR_FD,
+	UDPTUN_ATTR_FD,			/* u32 */
+	UDPTUN_ATTR_AF,			/* u8 */
+	UDPTUN_ATTR_LOCAL_ADDR,		/* u32/in6_addr */
+	UDPTUN_ATTR_LOCAL_PORT,		/* u16 */
+	UDPTUN_ATTR_PEER_ADDR,		/* u32/in6_addr */
+	UDPTUN_ATTR_PEER_PORT,		/* u16 */
+
 	__UDPTUN_ATTR_LAST
 };
+
 #define UDPTUN_ATTR_MAX (__UDPTUN_ATTR_LAST - 1)
 
 // fou in einem network namespace
