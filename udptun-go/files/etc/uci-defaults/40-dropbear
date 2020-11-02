@@ -1,0 +1,8 @@
+#!/bin/sh
+
+cp /rom/etc/dropbear/authorized_keys /etc/dropbear/
+
+# fix privileges
+chmod 755 /etc/dropbear
+chmod 600 /etc/dropbear/authorized_keys
+
