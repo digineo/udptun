@@ -15,7 +15,7 @@ description: UDP Tunneling
 vendor: "Digineo GmbH"
 
 files:
-  ./kmod/*: "/usr/src/udptun-1.0.0"
+  ./{Kbuild,dkms.conf,module.c,module.h,recv.c,recv.h,xmit.c,xmit.h}: "/usr/src/udptun-1.0.0"
 
 scripts:
   postinstall: ./debian/postinstall.sh
