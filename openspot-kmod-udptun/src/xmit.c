@@ -72,7 +72,7 @@ static int _send4(struct udptun_dev *foudev, struct sk_buff *skb)
 {
 	struct flowi4 *flowinfo = &foudev->flowinfo.u.ip4;
 	struct rtable *rt;
-	bool udp_sum = false;
+	bool udp_sum = true;
 	int rc;
 
 	rt = _get_rtable4(foudev, skb);
@@ -149,7 +149,7 @@ static int _send6(struct udptun_dev *foudev, struct sk_buff *skb)
 {
 	struct flowi6 *flowinfo = &foudev->flowinfo.u.ip6;
 	struct dst_entry *dst;
-	bool udp_sum = false;
+	bool udp_sum = true;
 	int rc = 0;
 
 	dst = _get_dst_entry(foudev, skb);
