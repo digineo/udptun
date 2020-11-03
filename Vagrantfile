@@ -20,18 +20,13 @@ Vagrant.configure("2") do |config|
   raise "unable to get default route" unless iface
   iface = iface[1]
 
-  config.vm.network "public_network", bridge: iface, mac: "0000C001D00D"
-
-  config.vm.provider "virtualbox" do |v|
-    # socat -d -d ./ttyS0.sock PTY
-    # v.customize ["modifyvm", :id, "--uart1", "0x3F8", "4"]
-    # v.customize ["modifyvm", :id, "--uartmode1", "server", "ttyS0.sock"]
+  [1,2].each do |i|
+    name = "node#{i}"
+    config.vm.define name do |node|
+      node.vm.hostname = name
+      node.vm.network "public_network", bridge: iface, mac: "0000C001D00#{i}"
+    end
   end
-
-  config.vm.provision :shell, inline: <<-SHELL
-    mkdir -p /root/.ssh
-    cat ~vagrant/.ssh/authorized_keys > /root/.ssh/authorized_keys
-  SHELL
 
   # Disable automatic box update checking. If you disable this, then
   # boxes will only be checked for updates when the user runs
@@ -82,11 +77,14 @@ Vagrant.configure("2") do |config|
   # Enable provisioning with a shell script. Additional provisioners such as
   # Ansible, Chef, Docker, Puppet and Salt are also available. Please see the
   # documentation for more information about their specific syntax and use.
-  config.vm.provision "shell", inline: <<-SHELL
-    apt-get update
-    apt-get install -y iperf3 dkms golang
-  SHELL
 
+  config.vm.provision :shell, inline: <<-SHELL
+    mkdir -p /root/.ssh
+    cat ~vagrant/.ssh/authorized_keys > /root/.ssh/authorized_keys
+
+    apt-get update
+    apt-get install -y iperf3 dkms golang --no-install-recommends
+  SHELL
 
   # Load required kernel modules
   config.vm.provision "shell", run: "always", inline: <<-SHELL
