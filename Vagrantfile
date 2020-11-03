@@ -1,6 +1,7 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
+
 # All Vagrant configuration is done below. The "2" in Vagrant.configure
 # configures the configuration version (we support older styles for
 # backwards compatibility). Please don't change it unless you know what
@@ -19,7 +20,7 @@ Vagrant.configure("2") do |config|
   raise "unable to get default route" unless iface
   iface = iface[1]
 
-  config.vm.network "public_network", bridge: iface
+  config.vm.network "public_network", bridge: iface, mac: "0000C001D00D"
 
   config.vm.provider "virtualbox" do |v|
     # socat -d -d ./ttyS0.sock PTY
@@ -81,8 +82,17 @@ Vagrant.configure("2") do |config|
   # Enable provisioning with a shell script. Additional provisioners such as
   # Ansible, Chef, Docker, Puppet and Salt are also available. Please see the
   # documentation for more information about their specific syntax and use.
-  # config.vm.provision "shell", inline: <<-SHELL
-  #   apt-get update
-  #   apt-get install -y apache2
-  # SHELL
+  config.vm.provision "shell", inline: <<-SHELL
+    apt-get update
+    apt-get install -y iperf3 dkms golang
+  SHELL
+
+
+  # Load required kernel modules
+  config.vm.provision "shell", run: "always", inline: <<-SHELL
+    modprobe udp_tunnel
+    modprobe ip_tunnel
+    modprobe ip6_tunnel
+    modprobe ip6_udp_tunnel
+  SHELL
 end
