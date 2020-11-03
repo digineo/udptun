@@ -14,6 +14,12 @@ Vagrant.configure("2") do |config|
   # boxes at https://vagrantcloud.com/search.
   config.vm.box = "ubuntu/focal64"
 
+  # interface with default route
+  iface = `ip route`.match(/default via \S+ dev (\S+)/)
+  raise "unable to get default route" unless iface
+  iface = iface[1]
+
+  config.vm.network "public_network", bridge: iface
 
   config.vm.provider "virtualbox" do |v|
     # socat -d -d ./ttyS0.sock PTY
