@@ -29,6 +29,10 @@ int udptun_udp_recv(struct sock *sk, struct sk_buff *skb)
 	int err = 0;
 	int proto;
 
+	foudev = rcu_dereference_sk_user_data(sk);
+	if (unlikely(!foudev))
+		goto drop;
+
 	netdev_dbg(foudev->dev, "udptun_udp_recv");
 
 	// UDP-header + IP-Header müssen vorhanden sein
@@ -50,10 +54,6 @@ int udptun_udp_recv(struct sock *sk, struct sk_buff *skb)
 	default:
 		goto drop;
 	}
-
-	foudev = rcu_dereference_sk_user_data(sk);
-	if (unlikely(!foudev))
-		goto drop;
 
 	// Pull UDP header
 	if (iptunnel_pull_header(skb, sizeof(struct udphdr), proto, !net_eq(foudev->net, dev_net(foudev->dev))))
