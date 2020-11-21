@@ -4,7 +4,7 @@ setup()
 {
   this=$1
   thisname="node$this"
-  otherip=$(getent hosts "node$2" | awk '{ print $1 }')
+  otherip="192.168.9.1$2"
 
   # Prepare ssh config for faster ssh invocation.
   ssh_config="$(mktemp --tmpdir vagrant_ssh_cfg.XXXXXXX)"
@@ -36,7 +36,7 @@ SHELL
 
 # build and setup up tunnels
 
-setup 1 2 & # node2 to node1
+setup 1 2 & # node1 to node2
 setup 2 1 & # node2 to node1
 
 wait
