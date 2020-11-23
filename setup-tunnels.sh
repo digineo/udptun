@@ -1,5 +1,9 @@
 #!/bin/sh
 
+# Used networks:
+# - 192.168.9.0/24 private Vagrant network for the VMs
+# - 192.168.2.0/24 inner network for the tunnel interfaces
+
 setup()
 {
   this=$1
