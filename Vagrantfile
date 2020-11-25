@@ -14,20 +14,14 @@ Vagrant.configure("2") do |config|
   # Every Vagrant development environment requires a box. You can search for
   # boxes at https://vagrantcloud.com/search.
   config.vm.box = "ubuntu/focal64"
+  config.vm.hostname = "node1"
 
   # interface with default route
   iface = `ip route`.match(/default via \S+ dev (\S+)/)
   raise "unable to get default route" unless iface
   iface = iface[1]
 
-  [1,2].each do |i|
-    name = "node#{i}"
-    config.vm.define name do |node|
-      node.vm.hostname = name
-      node.vm.network "private_network", ip: "192.168.9.1#{i}"
-      node.vm.network "public_network", bridge: iface, mac: "0000C001D00#{i}"
-    end
-  end
+  config.vm.network "public_network", bridge: iface, mac: "0000C001D000"
 
   # Disable automatic box update checking. If you disable this, then
   # boxes will only be checked for updates when the user runs
