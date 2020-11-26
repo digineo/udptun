@@ -38,20 +38,20 @@ func setup() {
 	// overwrite any error from the passed callback.
 	err = rawConn.Control(func(fd uintptr) {
 		log.Printf("fd=%v", fd)
-		passFd(fd, *ifname)
+		passFd(fd, *devName)
 	})
 	if err != nil {
 		panic(err)
 	}
 	conn.Close()
 
-	// IP-Adresse hinzufügen
-	ip, ipnet, err := net.ParseCIDR(*local)
+	// Add IP address
+	ip, ipnet, err := net.ParseCIDR(*devAddr)
 	if err != nil {
 		panic(err)
 	}
 
-	addAddr(*ifname, net.IPNet{
+	addAddr(*devName, net.IPNet{
 		IP:   ip,
 		Mask: ipnet.Mask,
 	})

@@ -1,8 +1,6 @@
 package main
 
 import (
-	"flag"
-
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -14,9 +12,9 @@ var (
 	cmdInfo   = kingpin.Command("info", "list all tunnels")
 	cmdListen = kingpin.Command("listen", "create a TUN interface and listen")
 
-	ifname     = kingpin.Flag("ifname", "interface name").Default("test").String()
-	local      = flag.String("ip", "fe80::1/64", "ip address of the interface")
-	listenPort = flag.Uint("port", 8500, "listening port for the server")
+	devName    = kingpin.Flag("dev", "interface name").Default("test").String()
+	devAddr    = kingpin.Flag("ip", "ip address to add to the interface").Default("fe80::1/64").String()
+	listenPort = kingpin.Flag("port", "listening port for the server").Default("8500").Int()
 )
 
 func main() {

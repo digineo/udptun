@@ -20,23 +20,32 @@ const mtu = 1450
 
 func listen() {
 	addr := net.UDPAddr{
-		Port: int(*listenPort),
+		Port: *listenPort,
+	}
+
+	var err error
+
+	log.Println("creating interface", *devName)
+	tun, err = CreateTun(*devName)
+	if err != nil {
+		panic(err)
 	}
 
 	log.Println("listening on", addr)
-	var err error
-
-	tun, err = CreateTun(*ifname)
-	if err != nil {
-		panic(err)
-	}
-
-	err = SetupTun(*ifname, mtu)
-	if err != nil {
-		panic(err)
-	}
-
 	udpConn, err = net.ListenUDP("udp", &addr)
+	if err != nil {
+		panic(err)
+	}
+
+	ip, ipnet, err := net.ParseCIDR(*devAddr)
+	if err != nil {
+		panic(err)
+	}
+
+	err = SetupTun(*devName, mtu, &net.IPNet{
+		IP:   ip,
+		Mask: ipnet.Mask,
+	})
 	if err != nil {
 		panic(err)
 	}
@@ -54,13 +63,20 @@ func CreateTun(ifname string) (*water.Interface, error) {
 	})
 }
 
-func SetupTun(ifname string, mtu int) error {
+func SetupTun(ifname string, mtu int, ip *net.IPNet) error {
 	link, err := netlink.LinkByName(ifname)
 	if err != nil {
 		return err
 	}
 
 	if err := netlink.LinkSetUp(link); err != nil {
+		return err
+	}
+
+	log.Println("adding IP address", ip)
+	if err := netlink.AddrAdd(link, &netlink.Addr{
+		IPNet: ip,
+	}); err != nil {
 		return err
 	}
 
