@@ -19,7 +19,7 @@ vagrant up
 
 ```
 cd udptun-go/src
-go build . && sudo ./main listen --ip 192.168.2.2/24
+go build . && sudo ./main run --ip 192.168.2.2/24
 ```
 
 ### Running iperf

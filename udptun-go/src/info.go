@@ -9,30 +9,40 @@ import (
 
 	"github.com/jsimonetti/rtnetlink"
 	"github.com/mdlayher/netlink"
+	"github.com/spf13/cobra"
 )
 
-func info() {
-	conn, err := rtnetlink.Dial(nil)
-	if err != nil {
-		panicf("failed to dial: %v", err)
-	}
-	defer conn.Close()
+func init() {
+	rootCmd.AddCommand(listCmd)
+}
 
-	msgs, err := conn.Link.ListByKind("udptun")
-	if err != nil {
-		panicf("failed to list links: %v", err)
-	}
-
-	for i := range msgs {
-		msg := &msgs[i]
-		data, err := decodeLinkData(msg.Attributes.Info.Data)
+// listCmd represents the list command
+var listCmd = &cobra.Command{
+	Use:   "list",
+	Short: "Lists all tunnels",
+	Run: func(cmd *cobra.Command, args []string) {
+		conn, err := rtnetlink.Dial(nil)
 		if err != nil {
-			log.Println(err)
-			continue
+			panicf("failed to dial: %v", err)
+		}
+		defer conn.Close()
+
+		msgs, err := conn.Link.ListByKind("udptun")
+		if err != nil {
+			panicf("failed to list links: %v", err)
 		}
 
-		fmt.Printf("iface=%v local=%+v remote=%+v\n", msg.Attributes.Name, udpAddrToString(data.local), udpAddrToString(data.remote))
-	}
+		for i := range msgs {
+			msg := &msgs[i]
+			data, err := decodeLinkData(msg.Attributes.Info.Data)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+
+			fmt.Printf("iface=%v local=%+v remote=%+v\n", msg.Attributes.Name, udpAddrToString(data.local), udpAddrToString(data.remote))
+		}
+	},
 }
 
 func udpAddrToString(addr net.UDPAddr) string {

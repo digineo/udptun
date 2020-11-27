@@ -3,56 +3,68 @@ package main
 import (
 	"log"
 	"net"
+
+	"github.com/spf13/cobra"
 )
 
-func setup() {
-	raddr, err := net.ResolveUDPAddr("udp", *remoteEndpoint)
-	if err != nil {
-		panic(err)
-	}
+func init() {
+	addTunnelFlags(setupCmd.Flags())
+	setupCmd.MarkFlagRequired("peer")
+	rootCmd.AddCommand(setupCmd)
+}
 
-	laddr, err := net.ResolveUDPAddr("udp", *localEndpoint)
-	if err != nil {
-		panic(err)
-	}
+// setupCmd represents the setup command
+var setupCmd = &cobra.Command{
+	Use:   "setup",
+	Short: "Set up the UDP tunnel interface in the kernel via netlink",
+	Run: func(cmd *cobra.Command, args []string) {
+		raddr, err := net.ResolveUDPAddr("udp", peerEndpoint)
+		if err != nil {
+			panic(err)
+		}
 
-	log.Println("connecting from", laddr, "to", raddr)
+		laddr := &net.UDPAddr{
+			Port: localPort,
+		}
 
-	// UDP-Socket aufbauen
-	conn, err := net.DialUDP("udp", laddr, raddr)
-	if err != nil {
-		panic(err)
-	}
+		log.Println("connecting from", laddr, "to", raddr)
 
-	conn.Write([]byte("hello world"))
+		// UDP-Socket aufbauen
+		conn, err := net.DialUDP("udp", laddr, raddr)
+		if err != nil {
+			panic(err)
+		}
 
-	log.Printf("local=%v remote=%v", conn.LocalAddr(), conn.RemoteAddr())
+		conn.Write([]byte("hello world"))
 
-	// get raw connection
-	rawConn, err := conn.SyscallConn()
-	if err != nil {
-		panic(err)
-	}
+		log.Printf("local=%v remote=%v", conn.LocalAddr(), conn.RemoteAddr())
 
-	// Store rawConn.Control err in nestedErr so that it doesn't
-	// overwrite any error from the passed callback.
-	err = rawConn.Control(func(fd uintptr) {
-		log.Printf("fd=%v", fd)
-		passFd(fd, *devName)
-	})
-	if err != nil {
-		panic(err)
-	}
-	conn.Close()
+		// get raw connection
+		rawConn, err := conn.SyscallConn()
+		if err != nil {
+			panic(err)
+		}
 
-	// Add IP address
-	ip, ipnet, err := net.ParseCIDR(*devAddr)
-	if err != nil {
-		panic(err)
-	}
+		// Store rawConn.Control err in nestedErr so that it doesn't
+		// overwrite any error from the passed callback.
+		err = rawConn.Control(func(fd uintptr) {
+			log.Printf("fd=%v", fd)
+			passFd(fd, devName)
+		})
+		if err != nil {
+			panic(err)
+		}
+		conn.Close()
 
-	addAddr(*devName, net.IPNet{
-		IP:   ip,
-		Mask: ipnet.Mask,
-	})
+		// Add IP address
+		ip, ipnet, err := net.ParseCIDR(ipAddr)
+		if err != nil {
+			panic(err)
+		}
+
+		addAddr(devName, net.IPNet{
+			IP:   ip,
+			Mask: ipnet.Mask,
+		})
+	},
 }

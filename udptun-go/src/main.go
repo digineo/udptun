@@ -1,30 +1,37 @@
 package main
 
 import (
-	"gopkg.in/alecthomas/kingpin.v2"
+	"fmt"
+	"os"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 var (
-	cmdSetup       = kingpin.Command("setup", "setup a tunnel")
-	localEndpoint  = cmdSetup.Flag("local", "tunnel local endpoint").Default(":0").String()
-	remoteEndpoint = cmdSetup.Flag("remote", "tunnel remote endpoint").Default("192.168.180.38:8500").String()
+	// rootCmd represents the base command when called without any subcommands
+	rootCmd = &cobra.Command{
+		Use:   os.Args[0],
+		Short: "udptun helper tool",
+		Long:  `https://github.com/digineo/udptun`,
+	}
 
-	cmdInfo   = kingpin.Command("info", "list all tunnels")
-	cmdListen = kingpin.Command("listen", "create a TUN interface and listen")
-
-	devName    = kingpin.Flag("dev", "interface name").Default("test").String()
-	devAddr    = kingpin.Flag("ip", "ip address to add to the interface").Default("fe80::1/64").String()
-	listenPort = kingpin.Flag("port", "listening port for the server").Default("8500").Int()
+	devName      string
+	ipAddr       string
+	localPort    int
+	peerEndpoint string
 )
 
 func main() {
-	switch kingpin.Parse() {
-	// Register user
-	case cmdSetup.FullCommand():
-		setup()
-	case cmdInfo.FullCommand():
-		info()
-	case cmdListen.FullCommand():
-		listen()
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
 	}
+}
+
+func addTunnelFlags(flagSet *pflag.FlagSet) {
+	flagSet.StringVar(&devName, "dev", "test", "tunnel device name")
+	flagSet.StringVar(&ipAddr, "ip", "192.168.2.2/24", "local IP address for the tunnel interface")
+	flagSet.IntVar(&localPort, "localPort", 5000, "local port")
+	flagSet.StringVar(&peerEndpoint, "peer", "", "peer endpoint (ip:port)")
 }

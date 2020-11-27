@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/songgao/water"
+	"github.com/spf13/cobra"
 	"github.com/vishvananda/netlink"
 )
 
@@ -14,44 +15,61 @@ var (
 	peerAddr *net.UDPAddr
 	tun      *water.Interface
 	udpConn  *net.UDPConn
+	mtu      uint32 = 1450
 )
 
-const mtu = 1450
+func init() {
+	addTunnelFlags(runCmd.Flags())
+	runCmd.Flags().Uint32Var(&mtu, "mtu", mtu, "MTU")
+	rootCmd.AddCommand(runCmd)
+}
 
-func listen() {
-	addr := net.UDPAddr{
-		Port: *listenPort,
-	}
+// runCmd represents the run command
+var runCmd = &cobra.Command{
+	Use:   "run",
+	Short: "Run a userspace tunnel",
+	Run: func(cmd *cobra.Command, args []string) {
+		var err error
+		addr := net.UDPAddr{
+			Port: localPort,
+		}
 
-	var err error
+		if peerEndpoint != "" {
+			peerAddr, err = net.ResolveUDPAddr("udp", peerEndpoint)
+			if err != nil {
+				panic(err)
+			}
+			log.Println("using peer address", peerAddr)
+		}
 
-	log.Println("creating interface", *devName)
-	tun, err = CreateTun(*devName)
-	if err != nil {
-		panic(err)
-	}
+		log.Println("creating interface", devName)
+		tun, err = CreateTun(devName)
+		if err != nil {
+			panic(err)
+		}
 
-	log.Println("listening on", addr)
-	udpConn, err = net.ListenUDP("udp", &addr)
-	if err != nil {
-		panic(err)
-	}
+		log.Println("listening on", addr)
+		udpConn, err = net.ListenUDP("udp", &addr)
+		if err != nil {
+			panic(err)
+		}
 
-	ip, ipnet, err := net.ParseCIDR(*devAddr)
-	if err != nil {
-		panic(err)
-	}
+		ip, ipnet, err := net.ParseCIDR(ipAddr)
+		if err != nil {
+			panic(err)
+		}
 
-	err = SetupTun(*devName, mtu, &net.IPNet{
-		IP:   ip,
-		Mask: ipnet.Mask,
-	})
-	if err != nil {
-		panic(err)
-	}
+		err = SetupTun(devName, int(mtu), &net.IPNet{
+			IP:   ip,
+			Mask: ipnet.Mask,
+		})
+		if err != nil {
+			panic(err)
+		}
 
-	go udpWorker()
-	tunWorker()
+		go udpWorker()
+		tunWorker()
+	},
 }
 
 func CreateTun(ifname string) (*water.Interface, error) {
@@ -83,6 +101,7 @@ func SetupTun(ifname string, mtu int, ip *net.IPNet) error {
 	return netlink.LinkSetMTU(link, mtu)
 }
 
+// Reads packets from the UDP socket and forwards the to the TUN device.
 func udpWorker() {
 	buf := make([]byte, mtu)
 
@@ -101,7 +120,7 @@ func udpWorker() {
 	}
 }
 
-// Reads packets from the TUN device and sends them via UDP
+// Reads packets from the TUN device and forwards them via UDP.
 func tunWorker() {
 	buf := make([]byte, mtu)
 
@@ -114,7 +133,7 @@ func tunWorker() {
 			break
 		}
 
-		if addr := peerAddr; addr != nil {
+		if peerAddr != nil {
 			written, _ := udpConn.WriteToUDP(buf[:n], peerAddr)
 			log.Printf("sent %d bytes", written)
 		}
