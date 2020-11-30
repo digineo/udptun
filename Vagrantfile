@@ -21,8 +21,13 @@ Vagrant.configure("2") do |config|
   raise "unable to get default route" unless iface
   iface = iface[1]
 
-  config.vm.define "node1" do
-    config.vm.network "public_network", bridge: iface, mac: "0000C001D000"
+  [1,2].each do |i|
+    name = "node#{i}"
+    config.vm.define name do |node|
+      node.vm.hostname = name
+      node.vm.network "private_network", ip: "192.168.9.1#{i}"
+      node.vm.network "public_network", bridge: iface, mac: "0000C001D00#{i}"
+    end
   end
 
   # Disable automatic box update checking. If you disable this, then
