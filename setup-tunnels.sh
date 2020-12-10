@@ -34,7 +34,7 @@ setup()
     ~/go/bin/main setup --local :5000 --remote "$otherip:5000"
     ip addr add 192.168.2.$this/24 dev test
     ip link set up dev test
-    ~/go/bin/main info
+    ~/go/bin/main list
 SHELL
 }
 

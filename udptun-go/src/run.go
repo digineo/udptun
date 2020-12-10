@@ -8,7 +8,6 @@ import (
 
 	"github.com/songgao/water"
 	"github.com/spf13/cobra"
-	"github.com/vishvananda/netlink"
 )
 
 var (
@@ -59,7 +58,7 @@ var runCmd = &cobra.Command{
 			panic(err)
 		}
 
-		err = SetupTun(devName, int(mtu), &net.IPNet{
+		err = configureDevice(devName, int(mtu), &net.IPNet{
 			IP:   ip,
 			Mask: ipnet.Mask,
 		})
@@ -79,26 +78,6 @@ func CreateTun(ifname string) (*water.Interface, error) {
 			Name: ifname,
 		},
 	})
-}
-
-func SetupTun(ifname string, mtu int, ip *net.IPNet) error {
-	link, err := netlink.LinkByName(ifname)
-	if err != nil {
-		return err
-	}
-
-	if err := netlink.LinkSetUp(link); err != nil {
-		return err
-	}
-
-	log.Println("adding IP address", ip)
-	if err := netlink.AddrAdd(link, &netlink.Addr{
-		IPNet: ip,
-	}); err != nil {
-		return err
-	}
-
-	return netlink.LinkSetMTU(link, mtu)
 }
 
 // Reads packets from the UDP socket and forwards the to the TUN device.

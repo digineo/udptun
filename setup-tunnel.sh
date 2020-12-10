@@ -27,8 +27,6 @@ ssh -F "$ssh_config" -t root@node1 <<SHELL
   cd /vagrant/udptun-go/src
   go install .
 
-  ~/go/bin/main setup --localPort 8500 --peer "$local:8500"
-  ip addr add 192.168.2.1/24 dev test
-  ip link set up dev test
-  ~/go/bin/main info
+  ~/go/bin/main setup --localPort 5000 --peer "$local:5000" --ip 192.168.2.1/24
+  ~/go/bin/main list
 SHELL

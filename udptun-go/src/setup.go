@@ -57,14 +57,18 @@ var setupCmd = &cobra.Command{
 		conn.Close()
 
 		// Add IP address
+
 		ip, ipnet, err := net.ParseCIDR(ipAddr)
 		if err != nil {
 			panic(err)
 		}
 
-		addAddr(devName, net.IPNet{
+		err = configureDevice(devName, 1450, &net.IPNet{
 			IP:   ip,
 			Mask: ipnet.Mask,
 		})
+		if err != nil {
+			panic(err)
+		}
 	},
 }
