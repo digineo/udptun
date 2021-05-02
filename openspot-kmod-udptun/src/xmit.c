@@ -83,8 +83,10 @@ static int _send4(struct udptun_dev *foudev, struct sk_buff *skb)
 	}
 
 	rc = _push_udptun_header(skb, sizeof(struct iphdr), udp_sum);
-	if (unlikely(rc))
+	if (unlikely(rc)){
+		pr_warn_ratelimited("no buffer space %d", rc);
 		goto err_no_buffer_space;
+	}
 
 	udp_tunnel_xmit_skb(
 		rt, foudev->sock->sk, skb,
@@ -149,7 +151,7 @@ static int _send6(struct udptun_dev *foudev, struct sk_buff *skb)
 {
 	struct flowi6 *flowinfo = &foudev->flowinfo.u.ip6;
 	struct dst_entry *dst;
-	bool udp_sum = true;
+	bool udp_sum = false;
 	int rc = 0;
 
 	dst = _get_dst_entry(foudev, skb);
@@ -193,7 +195,7 @@ netdev_tx_t udptun_xmit(struct sk_buff *skb, struct net_device *dev)
 	int err;
 
 	/* This is where the magic happens */
-	netdev_dbg(dev, "udptun_xmit");
+	// netdev_dbg(dev, "udptun_xmit");
 
 	skb_scrub_packet(skb, true);
 	skb_reset_mac_header(skb);

@@ -3,14 +3,14 @@
 #include <linux/version.h>
 #include "module.h"
 
-inline static int _udptun_inner_proto(struct iphdr *hdr, int *out_inner_proto)
+inline static int _udptun_inner_proto(struct iphdr *hdr, int *proto)
 {
 	switch (hdr->version) {
 	case 4:
-		*out_inner_proto = IPPROTO_IPIP;
+		*proto = IPPROTO_IPIP;
 		break;
 	case 6:
-		*out_inner_proto = IPPROTO_IPV6;
+		*proto = IPPROTO_IPV6;
 		break;
 	default:
 		return 1;
@@ -26,14 +26,21 @@ int udptun_udp_recv(struct sock *sk, struct sk_buff *skb)
 	struct udptun_dev *foudev;
 	struct iphdr *iphdr;
 	size_t len;
-	int err = 0;
-	int proto;
+	int err;
+	__be16 proto;
+	unsigned short family;
+	void *oiph;
 
 	foudev = rcu_dereference_sk_user_data(sk);
 	if (unlikely(!foudev))
 		goto drop;
 
-	netdev_dbg(foudev->dev, "udptun_udp_recv");
+	// netdev_dbg(foudev->dev, "udptun_udp_recv");
+
+	if (skb->protocol ==  htons(ETH_P_IP))
+		family = AF_INET;
+	else
+		family = AF_INET6;
 
 	// UDP-header + IP-Header müssen vorhanden sein
 	len = sizeof(struct udphdr) + sizeof(struct iphdr);
@@ -55,6 +62,9 @@ int udptun_udp_recv(struct sock *sk, struct sk_buff *skb)
 		goto drop;
 	}
 
+
+
+
 	// Pull UDP header
 	if (iptunnel_pull_header(skb, sizeof(struct udphdr), proto, !net_eq(foudev->net, dev_net(foudev->dev))))
 		goto drop;
@@ -62,7 +72,36 @@ int udptun_udp_recv(struct sock *sk, struct sk_buff *skb)
 	// set incoming device
 	skb->dev = foudev->dev;
 
-	if(gro_cells_receive(&foudev->gro_cells, skb)) {
+
+
+	oiph = skb_network_header(skb);
+	skb_reset_network_header(skb);
+
+	if (family == AF_INET)
+		err = IP_ECN_decapsulate(oiph, skb);
+	else
+		err = IP6_ECN_decapsulate(oiph, skb);
+
+	if (unlikely(err)) {
+		if  (!IS_ENABLED(CONFIG_IPV6) || family == AF_INET)
+			net_info_ratelimited("non-ECT from %pI4 "
+							"with TOS=%#x\n",
+							&((struct iphdr *)oiph)->saddr,
+							((struct iphdr *)oiph)->tos);
+		else
+			net_info_ratelimited("non-ECT from %pI6\n",
+							&((struct ipv6hdr *)oiph)->saddr);
+
+		if (err > 1) {
+			++foudev->dev->stats.rx_frame_errors;
+			++foudev->dev->stats.rx_errors;
+			goto drop;
+		}
+	}
+
+
+	err = gro_cells_receive(&foudev->gro_cells, skb);
+	if (unlikely(err == NET_RX_SUCCESS)) {
 		netdev_dbg(foudev->dev, "udptun_udp_recv: gro_cells_receive failed");
 	}
 
@@ -72,6 +111,7 @@ drop:
 	netdev_dbg(foudev->dev, "udptun_udp_recv: dropped");
 	foudev->dev->stats.rx_dropped++;
 	kfree_skb(skb);
+
 	return 0;
 }
 
@@ -91,7 +131,16 @@ struct sk_buff **udptun_gro_receive(struct sock *sk, struct sk_buff **head, stru
 	struct gro_remcsum grc;
 	int proto;
 
-	netdev_dbg(skb->dev, "udptun_gro_receive");
+
+	/* We can clear the encap_mark for FOU as we are essentially doing
+	 * one of two possible things.  We are either adding an L4 tunnel
+	 * header to the outer L3 tunnel header, or we are are simply
+	 * treating the GRE tunnel header as though it is a UDP protocol
+	 * specific header such as VXLAN or GENEVE.
+	 */
+	NAPI_GRO_CB(skb)->encap_mark = 0;
+
+	//netdev_dbg(skb->dev, "udptun_gro_receive");
 	skb_gro_remcsum_init(&grc);
 
 	off = skb_gro_offset(skb);
@@ -108,17 +157,6 @@ struct sk_buff **udptun_gro_receive(struct sock *sk, struct sk_buff **head, stru
 	if(_udptun_inner_proto(iphdr, &proto)){
 		goto out;
 	}
-
-	/* We can clear the encap_mark for GUE as we are essentially doing
-	 * one of two possible things.  We are either adding an L4 tunnel
-	 * header to the outer L3 tunnel header, or we are are simply
-	 * treating the GRE tunnel header as though it is a UDP protocol
-	 * specific header such as VXLAN or GENEVE.
-	 */
-	NAPI_GRO_CB(skb)->encap_mark = 0;
-
-	/* Flag this frame as already having an outer encap header */
-	NAPI_GRO_CB(skb)->is_fou = 1;
 
 	rcu_read_lock();
 	offloads = NAPI_GRO_CB(skb)->is_ipv6 ? inet6_offloads : inet_offloads;

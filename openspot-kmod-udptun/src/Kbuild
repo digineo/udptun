@@ -1,4 +1,4 @@
-# EXTRA_CFLAGS = -g -DDEBUG
+EXTRA_CFLAGS = -g -DDEBUG
 
 udptun-y := \
 	xmit.o \

@@ -108,7 +108,7 @@ static void udptun_setup(struct net_device *dev)
 	dev->addr_len          = 0;
 	dev->mtu               = ETH_DATA_LEN;
 	dev->min_mtu           = IPV4_MIN_MTU;
-	dev->max_mtu           = IP_MAX_MTU;
+	dev->max_mtu           = IP_MAX_MTU - 8;
 	dev->type              = ARPHRD_NONE;
 	netif_keep_dst(dev);
 	dev->priv_flags       |= IFF_NO_QUEUE;
@@ -263,6 +263,8 @@ static int udptun_configure(struct net *net, struct net_device *dev,
 	tunnel_cfg.gro_complete     = udptun_gro_complete;
 	setup_udp_tunnel_sock(net, skt, &tunnel_cfg);
 
+	skt->sk->sk_allocation = GFP_ATOMIC;
+
 	/* As the setup_udp_tunnel_sock does not call udp_encap_enable if the
 	* socket type is v6 an explicit call to udp_encap_enable is needed.
 	*/
@@ -272,8 +274,8 @@ static int udptun_configure(struct net *net, struct net_device *dev,
 
 	// Update flow info
 	// see https://elixir.bootlin.com/linux/latest/source/drivers/net/geneve.c#L1568
-		if (skt->sk->sk_family == AF_INET){
-	_update_flowi4(foudev);
+	if (skt->sk->sk_family == AF_INET){
+		_update_flowi4(foudev);
 	} else {
 		_update_flowi6(foudev);
 	}
