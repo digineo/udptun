@@ -1,6 +1,14 @@
 udptun
 ======
 
+udptun is a UDP tunneling device implemented as a kernel module.
+It can be created and configured via netlink.
+
+* [X] Adding and removing tunnel interfaces via netlink
+* [X] Encapsulation of IPv4 and IPv6 packets
+* [X] Transmission of encapsulated UDP packets via IPv4 and IPv6
+* [ ] Fixing packet loss / speed issues
+
 ## Using Vagrant
 
 1. Start the Vagrant VM:
@@ -86,4 +94,26 @@ scp bin/targets/ramips/mt7621/openwrt-ramips-mt7621-ubnt-erx-squashfs-sysupgrade
 ```
 picocom -b 57600 /dev/ttyUSB0
 sysupgrade /tmp/*-sysupgrade.bin
+```
+
+## DropWatch
+
+[DropWatch](https://github.com/nhorman/dropwatch) shows where in the kernel packet loss happens.
+Install the required dependencies:
+
+### Installation
+```
+sudo apt-get install autoconf automake pkg-config libtool libreadline-dev binutils-dev libnl-3-dev libnl-genl-3-dev
+sudo apt-get source dropwatch
+cd dropwatch
+./autogen.sh
+./configure
+make
+sudo make install
+```
+
+### Running
+
+```
+sudo dropwatch -l kas
 ```
